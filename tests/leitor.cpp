@@ -46,7 +46,7 @@ TEST_CASE("leitor síncrono com leitura de n comandos e timeout") {
      * deixar sem timeout
      *
      */
-    ILeitor::status err = leitor.txrx(comandos, respostas, 1000);
+    ILeitor::status err = leitor.txrx(&comandos, &respostas, 1000);
 
     /**
      * a limitação neste caso é que um comando pode gerar muitas respostas
@@ -98,6 +98,8 @@ TEST_CASE("leitor(es) assíncronos com available() + dequeue()") {
         }
     }
 
+    // outra thread/task:
+
     // pega os comandos de leitura de algum evento, I/O, etc
     comando_t cmd1 = {0x14, 0x12, 0x34, 0x56};
     comando_t cmd2 = {0x20, 0x67, 0x00, 0x01, 0x02};
@@ -111,5 +113,51 @@ TEST_CASE("leitor(es) assíncronos com available() + dequeue()") {
 
 TEST_CASE("leitor(es) assincronos com callback") {
 
+    /**
+     * com um handler, deixamos para o usuario desta API se virar com o
+     * gerenciamento dos comandos vindos. O leitor apenas recebe uma resposta e
+     * passa para o usuário, assim o leitor só precisa se preocupar em ter
+     * espaço para armazenar apenas uma resposta por vez.
+     */
+    void handler_cmd_rxed(Leitor leitor, Leitor::Status status, resposta_t resposta) {
+        // salva, transmite, etc a resposta recebida pelo leitor
+
+        if (status == Leitor::Status::SUCESSO) {
+            // ...
+        }
+        else {
+            // ...
+        }
+    }
+
+    PortaFake0 serial0("port0");
+    PortaFake0 serial1("port1");
+
+    // aqui temos que informar ao leitor de alguma forma o número máximo de
+    // comando_t que ele pode manter internamente. Ou entao passar o
+    // buffer/container no qual vai armazenar os comando_t. Deve ser container
+    // de ponteiros ou objetos de comando_t? Acho que de ponteiros para
+    // simplificar a classe Leitor, assim ele n precisa se preocupar com a
+    // alocação dos comando_t, ficando essa responsabilidade pro usuário
+
+    Leitor leitor0(serial0, handler_cmd_rxed);
+    Leitor leitor1(serial1, handler_cmd_rxed);
+
+    // thread/task dos leitores
+    while (1) {
+        leitor0.process();
+        leitor1.process();
+    }
+
+    // outra thread/task:
+
+    // pega os comandos de leitura de algum evento, I/O, etc
+    comando_t cmd1 = {0x14, 0x12, 0x34, 0x56};
+    comando_t cmd2 = {0x20, 0x67, 0x00, 0x01, 0x02};
+    leitor0.enqueue(&cmd1);
+    leitor0.enqueue(&cmd2);
+    leitor1.enqueue(&cmd1);
+    leitor1.enqueue(&cmd2);
+    
 }
 
