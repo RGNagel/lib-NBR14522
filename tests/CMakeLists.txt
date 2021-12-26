@@ -6,6 +6,7 @@ set(TESTFILES        # All .cpp files in tests/
     dummy.cpp
     leitor.cpp
     CRC.cpp
+    ring_buffer.cpp
 )
 
 set(TEST_MAIN unit_tests)   # Default name for test executable (change if you wish).
