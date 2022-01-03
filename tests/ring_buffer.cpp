@@ -51,6 +51,4 @@ TEST_CASE("Ring Buffer") {
     CHECK(0x88 == rb.read());
     CHECK(0x99 == rb.read());
     CHECK(0xAA == rb.read());
-
 }
-
