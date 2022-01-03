@@ -53,4 +53,3 @@ template <typename T, size_t S> class RingBuffer {
 
     size_t toread() { return _toread; }
 };
-
