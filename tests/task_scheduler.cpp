@@ -1,5 +1,10 @@
 #include "doctest/doctest.h"
+#include <task_scheduler.h>
 #include <functional>
+#include <map>
+#include <future>
+#include <chrono>
+#include <thread>
 
 // class TaskScheduler {
 //     class Task {
@@ -8,8 +13,6 @@
 //         bool _repeat;
 //         uint32_t _waitAtLeastMiliseconds;
 //         bool _canceled;
-
-
 
 //       public:
 //         Task(std::function<void()> callback,
@@ -54,91 +57,51 @@
 //     void [[noreturn]] run() { _events.run(); }
 // };
 
-
-typedef uint32_t tick_t;
-typedef uint32_t miliseconds_t;
-typedef int task_t;
-
-tick_t miliseconds2ticks(const miliseconds_t ms, const miliseconds_t tickPeriod) {
-    if (ms == 0 || tickPeriod == 0 || ms < tickPeriod)
-        return 0;
-
-    tick_t retval = static_cast<tick_t>(ms/tickPeriod);
-
-    // round up the tick quantity so we can assure it will consider AT LEAST the
-    // ms informed
-    if (ms % tickPeriod != 0)
-        retval++;
-
-    return retval;
-}
-
 TEST_CASE("miliseconds to ticks") {
     CHECK(0 == miliseconds2ticks(0, 0));
     CHECK(0 == miliseconds2ticks(0, 100));
     CHECK(0 == miliseconds2ticks(100, 0));
 
-    CHECK(1 == miliseconds2ticks(10,10));
+    CHECK(1 == miliseconds2ticks(10, 10));
 
-    CHECK(6 == miliseconds2ticks(55,10));
-    CHECK(6 == miliseconds2ticks(59,10));
-    CHECK(6 == miliseconds2ticks(51,10));
-    CHECK(5 == miliseconds2ticks(50,10));
+    CHECK(6 == miliseconds2ticks(55, 10));
+    CHECK(6 == miliseconds2ticks(59, 10));
+    CHECK(6 == miliseconds2ticks(51, 10));
+    CHECK(5 == miliseconds2ticks(50, 10));
 }
 
-class TaskScheduler {
-    private:
-        class Task {
-            private:
-                task_t _taskID;
-                tick_t _tickValueWhenCreated;
-                tick_t _waitAtLeastTicks;
-            public:
-            Task(tick_t tickBase, tick_t waitAtLeast) : _tickValueWhenCreated(tickBase), _waitAtLeastTicks(waitAtLeast) {
-                static task_t id = 0;
-                _taskID = id;
-                id++;
-            }
-
-            task_t getID() {return _taskID;}
-
-        };
-        tick_t _counter;
-        miliseconds_t _tickPeriod;
-    public:
-
-        TaskScheduler() : _counter(0) {}
-
-        task_t addTask(std::function<void()> callback, miliseconds_t waitAtLeast = 0) {
-
-            Task task(_counter + 1, miliseconds2ticks(waitAtLeast, _tickPeriod));
-
-            
-            return task.getID();
-        }
-
-        bool removeTask(task_t task) {
-
-        }
-
-        void [[noreturn]] run() {
-            while (1) {
-                
-                _counter++;
-                // timer.waitMiliseconds(10);
-            }
-        }
-};
-
-TEST_CASE("Task Scheduler") {
-    TaskScheduler scheduler;
-
-    scheduler.addTask({...});
-    scheduler.addTask({...}, 1000);
-    scheduler.addTask({...}, 1000);
-
-    int taskID = scheduler.addTask({...}, 100);
-    scheduler.removeTask(taskID);
+// bool operator>(const TaskScheduler::Task)
 
 
+
+void schedulerRun(TaskScheduler *scheduler) {
+    scheduler->run();
 }
+
+// TEST_CASE("Task Scheduler") {
+//     TaskScheduler scheduler;
+
+//     auto schedulerRunResult = std::async(std::launch::async, schedulerRun, &scheduler);
+
+//     scheduler.addTask([](){
+//         printf("task 0\n");
+//     });
+//     scheduler.addTask([](){
+//         printf("task 1\n");
+//     });
+//     scheduler.addTask([](){
+//         printf("task 2\n");
+//     });
+
+//     int x = 5;
+
+//     // scheduler.addTask([x]() mutable {
+//     //     // x += 5;
+//     // });
+
+//     // std::this_thread::sleep_for(std::chrono::seconds(1));
+
+//     CHECK(x == 10);
+// }
+
+
