@@ -15,4 +15,4 @@ else
 fi
 
 # Remove the remote (you probably want your own instead).
-git remote remove origin
+# git remote remove origin
