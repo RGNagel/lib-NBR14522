@@ -42,8 +42,9 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
     TaskScheduler _tasks;
     uint8_t _nak_transmitted = 0;
 
-    bool _hasByteWithinTMAXSINC = false;
-    comando_t _comandoRecebido;
+    // comando vindo do leitor
+    comando_t _comando;
+    size_t _comandoIndex = 0;
 
     enum {
             CONECTADO,
@@ -57,20 +58,89 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
             rb.read();
     }
 
-    void hasByteWithinTMAXSINC() {
-        if (_state != CONECTADO)
-            return;
+    bool _comandoRecebido() {
 
-        if (_rb_received.toread() >= 1)
-            _hasByteWithinTMAXSINC = true;
-        else
-            _hasByteWithinTMAXSINC = false;
+        uint16_t crcReceived = NBR14522::getCRC(_comando);
+        uint16_t crcCalculated =
+            CRC16(_comando.data(), _comando.size() - 2);
+
+        if (crcReceived != crcCalculated) {
+            // se CRC com erro, o medidor deve enviar um NAK para o
+            // leitor e aguardar novo COMANDO. O máximo de NAKs enviados
+            // para um mesmo comando é 7.
+
+            if (_nak_transmitted >= MAX_BLOCO_NAK) {
+                // quebra de sequencia o medidor envia o ENQ
+                _nak_transmitted = 0;
+                // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo de leitura do comando
+                _tasks.addTask(std:;bind(_ENQ, this), TMINENQ_MSEC);
+            }
+            else {
+                _rb_transmitted.write(NBR14522::NAK);
+                _nak_transmitted++;
+                _state = NAK_ENVIADO;
+                _tasks.addTask(std::bind(hasByteWithinTMAXRSP, this), TMAXRSP_MSEC);
+            }
+        }
+        // verifica se o comando recebido existe e/ou é valido
+        else if (!NBR14522::isValidCodeCommand(comandoRecebido.at(0))) {
+            // a norma não define qual deve ser o comportamento do
+            // medidor após receber um comando inválido mas com CRC OK.
+            // vamos quebrar a sessão.
+
+            // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo de leitura do comando
+            _tasks.addTask(std:;bind(_ENQ, this), TMINENQ_MSEC);
+        }
+        // comando recebido OK
+        else {
+            // TODO ...
+        }
+
+
+    }
+
+    void _readNextPieceOfComando() {
+        if (_rb_received.toread() <= 0) {
+            // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo das leituras dos bytes anteriores
+            _tasks.addTask(std:;bind(_ENQ, this), TMINENQ_MSEC);
+            return;
+        }
+
+        _readPieceOfComando();
+    }
+
+    void _readPieceOfComando() {
+        while (_rb_received.toread() && _comandoIndex < COMANDO_SZ)
+            _comando.at(_comandoIndex++) = _rb_received.read();
+
+        if (_comandoIndex == COMANDO_SZ) {
+            _comandoIndex = 0;
+            _comandoRecebido();
+        }
+        else {
+            _tasks.addTask(std::bind(_readNextPieceOfComando, this), TMAXCAR_MSEC);
+        }
+    }
+
+    void hasByteWithinTMAXSINC() {
+
+        if (_rb_received.toread() <= 0) {
+            _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC - TMAXSINC_MSEC);
+            return;
+        }
+
+        // has rxed at least one byte
+
+        _comandoIndex = 0;
+        _readPieceOfComando();
     }
 
     void hasByteWithinTMAXRSP() {
-        if (_state != NAK_ENVIADO)
-            return;
-
+        switch (_state) {
+            case NAK_ENVIADO:
+                
+                break;
+        }
         
     }
 
@@ -84,63 +154,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
         // de acordo com a norma, deveriamos receber o primeiro byte de
         // dado após no máximo ~TMAXSINC_MSEC depois de enviar o
         // ENQ.
-        _hasByteWithinTMAXSINC = false;
         _tasks.addTask(std::bind(hasByteWithinTMAXSINC, this), TMAXSINC_MSEC);
-        
-        // next ENQ
-        _tasks.addTask(std::bind(periodicENQ, this), TMINENQ_MSEC);
-    }
-
-    void periodicENQ() {
-        
-        if (_state != CONECTADO)
-            return;
-
-        // recebeu exatamente um comando após ENQ?
-        if (_hasByteWithinTMAXSINC && _rb_received.toread() == COMANDO_SZ) {
-
-            for (size_t i = 0; i < COMANDO_SZ; i++)
-                _comandoRecebido.at(i) = _rb_received.read();
-
-            uint16_t crcReceived = NBR14522::getCRC(comandoRecebido);
-            uint16_t crcCalculated =
-                CRC16(comandoRecebido.data(), comandoRecebido.size() - 2);
-
-            if (crcReceived != crcCalculated) {
-                // se CRC com erro, o medidor deve enviar um NAK para o
-                // leitor e aguardar novo COMANDO. O máximo de NAKs enviados
-                // para um mesmo comando é 7.
-
-                if (_nak_transmitted >= MAX_BLOCO_NAK) {
-                    // quebra de sequencia o medidor envia o ENQ
-                    _nak_transmitted = 0;
-                    _ENQ();
-                    return;
-                }
-
-                // descarta todos os bytes recebidos até agora
-                _flush(_rb_received);
-
-                _rb_transmitted.write(NBR14522::NAK);
-                _nak_transmitted++;
-                _tasks.addTask(std::bind(hasByteWithinTMAXRSP, this), TMAXRSP_MSEC);
-                _state = NAK_ENVIADO;
-                return;
-            }
-
-            // verifica se o comando recebido existe e/ou é valido
-            if (!NBR14522::isValidCodeCommand(comandoRecebido.at(0))) {
-                // a norma não define qual deve ser o comportamento do
-                // medidor após receber um comando inválido mas com CRC OK.
-                // vamos quebrar a sessão.
-
-                break;
-            }
-
-            return;
-        }
-
-        _ENQ();
     }
 
   protected:
@@ -166,7 +180,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
   public:
 
     MedidorSimulado() {
-        _tasks.addTask(std::bind(periodicENQ, this), TMINENQ_MSEC);
+        _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
     }
     
     [[noreturn]] void run() {

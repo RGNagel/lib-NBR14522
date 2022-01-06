@@ -51,6 +51,10 @@ constexpr uint32_t BAUDRATE = 9600;
 // dados, 1 stop): 10/9600baud = ~1,042 ms
 constexpr uint32_t TCAR_MSEC = 1;
 
+// TENTCAR: tempo entre os start bits de dois caracteres consecutivos de um mesmo COMANDO ou RESPOSTA
+// TMAXCAR: tempo máximo que TENTCAR pode ter
+constexpr uint32_t TMAXCAR_MSEC = TCAR_MSEC + 5;
+
 // TREV (reversão): tempo entre inicio do start bit do último caracter recebido
 // e o inicio do start bit do primeiro caracter a transmitir
 
