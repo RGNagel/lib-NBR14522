@@ -1,11 +1,13 @@
 #include "doctest/doctest.h"
-#include <CRC.h>
-#include <array>
-#include <functional>
+#include <types_local.h>
+#include <task_scheduler.h>
 #include <iporta.h>
 #include <ring_buffer.h>
+#include <CRC.h>
+
+#include <array>
+#include <functional>
 #include <string.h>
-#include <types_local.h>
 
 using namespace NBR14522;
 
@@ -36,6 +38,130 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
   private:
     RingBuffer<byte_t, 1024> _rb_received;
     RingBuffer<byte_t, 1024> _rb_transmitted;
+    
+    TaskScheduler _tasks;
+    uint8_t _nak_transmitted = 0;
+
+    // comando vindo do leitor
+    comando_t _comando;
+    size_t _comandoIndex = 0;
+
+    enum {
+            CONECTADO,
+            COMANDO_RECEBIDO,
+            NAK_ENVIADO,
+            RESPOSTA_ENVIADA
+    } _state = CONECTADO;
+
+    void _flush(RingBuffer<byte_t, 1024> &rb) {
+        while (rb.toread() >= 1)
+            rb.read();
+    }
+
+    bool _comandoRecebido() {
+
+        uint16_t crcReceived = NBR14522::getCRC(_comando);
+        uint16_t crcCalculated =
+            CRC16(_comando.data(), _comando.size() - 2);
+
+        if (crcReceived != crcCalculated) {
+            // se CRC com erro, o medidor deve enviar um NAK para o
+            // leitor e aguardar novo COMANDO. O máximo de NAKs enviados
+            // para um mesmo comando é 7.
+
+            if (_nak_transmitted >= MAX_BLOCO_NAK) {
+                // quebra de sequencia o medidor envia o ENQ
+                _nak_transmitted = 0;
+                // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo de leitura do comando
+                _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
+            }
+            else {
+                _rb_transmitted.write(NBR14522::NAK);
+                _nak_transmitted++;
+                _state = NAK_ENVIADO;
+                _tasks.addTask(std::bind(timedOutTMAXRSP, this), TMAXRSP_MSEC);
+            }
+        }
+        // verifica se o comando recebido existe e/ou é valido
+        else if (!NBR14522::isValidCodeCommand(comandoRecebido.at(0))) {
+            // a norma não define qual deve ser o comportamento do
+            // medidor após receber um comando inválido mas com CRC OK.
+            // vamos quebrar a sessão.
+
+            // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo de leitura do comando
+            _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
+        }
+        // comando recebido OK
+        else {
+            // TODO ...
+        }
+
+
+    }
+
+    void _readNextPieceOfComando() {
+        if (_rb_received.toread() <= 0) {
+            // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo das leituras dos bytes anteriores
+            _tasks.addTask(std:;bind(_ENQ, this), TMINENQ_MSEC);
+            return;
+        }
+
+        _readPieceOfComando();
+    }
+
+    void _readPieceOfComando() {
+        while (_rb_received.toread() && _comandoIndex < COMANDO_SZ)
+            _comando.at(_comandoIndex++) = _rb_received.read();
+
+        if (_comandoIndex == COMANDO_SZ) {
+            _comandoIndex = 0;
+            _comandoRecebido();
+        }
+        else {
+            _tasks.addTask(std::bind(_readNextPieceOfComando, this), TMAXCAR_MSEC);
+        }
+    }
+
+    void timedOutTMAXSINC() {
+
+        if (_rb_received.toread() <= 0) {
+            _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC - TMAXSINC_MSEC);
+            return;
+        }
+
+        // has rxed at least one byte
+
+        _comandoIndex = 0;
+        _readPieceOfComando();
+    }
+
+    void timedOutTMAXRSP() {
+        switch (_state) {
+            case NAK_ENVIADO:
+                if (_rb_received.toread() <= 0) {
+                    // TODO (MAYBE): calculate next ENQ regarding the last bytes txed
+                    _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
+                }
+                else {
+                    _comandoIndex = 0;
+                    _readPieceOfComando();
+                }
+                break;
+        }
+    }
+
+    void _ENQ() {
+        // discard all bytes received so far
+        _flush(_rb_received);
+        
+        // send ENQ
+        _rb_transmitted.write(NBR14522::ENQ);
+
+        // de acordo com a norma, deveriamos receber o primeiro byte de
+        // dado após no máximo ~TMAXSINC_MSEC depois de enviar o
+        // ENQ.
+        _tasks.addTask(std::bind(timedOutTMAXSINC, this), TMAXSINC_MSEC);
+    }
 
   protected:
     // _write() e _read() são chamadas pelo leitor somente
@@ -57,13 +183,16 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
         return until;
     }
 
-    void _flushReadBuffer() {
-        // esvazia read buffer
-        while (_rb_received.toread() >= 1)
-            _rb_received.read();
+  public:
+
+    MedidorSimulado() {
+        _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
+    }
+    
+    [[noreturn]] void run() {
+        _tasks.run();
     }
 
-  public:
     [[noreturn]] void engine() {
         static enum {
             CONECTADO,
@@ -86,29 +215,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
 
         while (1) {
             switch (engineFSM) {
-            case CONECTADO: {
 
-                // de acordo com a norma, deveriamos receber o primeiro byte de
-                // dado aqui após no máximo ~TMAXSINC_MSEC depois de enviar o
-                // ENQ. Mas não vamos fazer essa verificação (TODO?). Para
-                // simplificar, vamos considerar o intervalo entre ENQs o
-                // suficiente para receber exatamente um comando completo.
-
-                size_t bytesAfterLastENQ =
-                    _rb_received.toread() - previous_toread;
-                if (bytesAfterLastENQ == COMANDO_SZ) {
-                    for (size_t i = 0; i < COMANDO_SZ; i++)
-                        comandoRecebido.at(i) = _rb_received.read();
-                    engineFSM = COMANDO_RECEBIDO;
-                    break;
-                } else {
-                    _flushReadBuffer();
-                }
-
-                previous_toread = _rb_received.toread();
-                _rb_transmitted.write(NBR14522::ENQ);
-                // _timer.waitMiliseconds(TAVGENQ_MSEC);
-            } break;
             case COMANDO_RECEBIDO: {
 
                 uint16_t crcReceived = NBR14522::getCRC(comandoRecebido);
