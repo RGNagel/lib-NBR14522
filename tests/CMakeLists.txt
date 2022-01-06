@@ -8,6 +8,7 @@ set(TESTFILES        # All .cpp files in tests/
     ring_buffer.cpp
     CRC.cpp
     medidor_simulado.cpp
+    gerador_de_respostas.cpp
     task_scheduler.cpp
 )
 

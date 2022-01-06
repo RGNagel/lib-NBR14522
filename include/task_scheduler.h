@@ -1,7 +1,7 @@
 #pragma once
 
-#include <thread>
 #include <chrono>
+#include <thread>
 
 #include <functional>
 #include <map>
@@ -10,7 +10,7 @@ typedef uint32_t milliseconds_t;
 typedef int task_t;
 
 inline tick_t miliseconds2ticks(const milliseconds_t ms,
-                         const milliseconds_t tickPeriod) {
+                                const milliseconds_t tickPeriod) {
     if (ms == 0 || tickPeriod == 0 || ms < tickPeriod)
         return 0;
 
@@ -26,25 +26,24 @@ inline tick_t miliseconds2ticks(const milliseconds_t ms,
 
 class TaskScheduler {
   private:
-
     tick_t _counter;
     milliseconds_t _tickPeriod;
     std::multimap<tick_t, std::function<void()>> _tasks;
     bool _stop = false;
 
   public:
-
-    TaskScheduler(milliseconds_t tickPeriod = 10) : _counter(0), _tickPeriod(tickPeriod) {}
+    TaskScheduler(milliseconds_t tickPeriod = 10)
+        : _counter(0), _tickPeriod(tickPeriod) {}
 
     void addTask(std::function<void()> callback,
-                   milliseconds_t waitAtLeast = 0) {
+                 milliseconds_t waitAtLeast = 0) {
         tick_t key = _counter + miliseconds2ticks(waitAtLeast, _tickPeriod);
         _tasks.insert({key, callback});
     }
 
     [[noreturn]] void run() {
         while (1) {
-            
+
             if (_tasks.size() <= 0) {
                 _counter = 0;
                 continue;
@@ -56,7 +55,6 @@ class TaskScheduler {
 
             _counter++;
             std::this_thread::sleep_for(std::chrono::milliseconds(_tickPeriod));
-
         }
     }
 };

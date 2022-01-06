@@ -1,9 +1,9 @@
 #include "doctest/doctest.h"
-#include <task_scheduler.h>
-#include <functional>
-#include <map>
-#include <future>
 #include <chrono>
+#include <functional>
+#include <future>
+#include <map>
+#include <task_scheduler.h>
 #include <thread>
 
 TEST_CASE("miliseconds to ticks") {
@@ -18,4 +18,3 @@ TEST_CASE("miliseconds to ticks") {
     CHECK(6 == miliseconds2ticks(51, 10));
     CHECK(5 == miliseconds2ticks(50, 10));
 }
-

@@ -1,30 +1,15 @@
 #include "doctest/doctest.h"
-#include <types_local.h>
-#include <task_scheduler.h>
-#include <iporta.h>
-#include <ring_buffer.h>
 #include <CRC.h>
-
 #include <array>
 #include <functional>
+#include <gerador_de_respostas.h>
+#include <iporta.h>
+#include <ring_buffer.h>
 #include <string.h>
+#include <task_scheduler.h>
+#include <types_local.h>
 
 using namespace NBR14522;
-
-// class GeradorDeRespostas {
-//   public:
-//     void set(comando_t& comando) {
-//         // ...
-//     }
-
-//     resposta_t getNextResposta() {
-//         // ...
-
-//         resposta_t res;
-
-//         return res;
-//     }
-// };
 
 /**
  *
@@ -38,7 +23,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
   private:
     RingBuffer<byte_t, 1024> _rb_received;
     RingBuffer<byte_t, 1024> _rb_transmitted;
-    
+
     TaskScheduler _tasks;
     uint8_t _nak_transmitted = 0;
 
@@ -47,13 +32,13 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
     size_t _comandoIndex = 0;
 
     enum {
-            CONECTADO,
-            COMANDO_RECEBIDO,
-            NAK_ENVIADO,
-            RESPOSTA_ENVIADA
+        CONECTADO,
+        COMANDO_RECEBIDO,
+        NAK_ENVIADO,
+        RESPOSTA_ENVIADA
     } _state = CONECTADO;
 
-    void _flush(RingBuffer<byte_t, 1024> &rb) {
+    void _flush(RingBuffer<byte_t, 1024>& rb) {
         while (rb.toread() >= 1)
             rb.read();
     }
@@ -61,8 +46,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
     void _comandoRecebido() {
 
         uint16_t crcReceived = NBR14522::getCRC(_comando);
-        uint16_t crcCalculated =
-            CRC16(_comando.data(), _comando.size() - 2);
+        uint16_t crcCalculated = CRC16(_comando.data(), _comando.size() - 2);
 
         if (crcReceived != crcCalculated) {
             // se CRC com erro, o medidor deve enviar um NAK para o
@@ -72,10 +56,10 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
             if (_nak_transmitted >= MAX_BLOCO_NAK) {
                 // quebra de sequencia o medidor envia o ENQ
                 _nak_transmitted = 0;
-                // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo de leitura do comando
+                // TODO (MAYBE): calcular valor do próximo ENQ levando em
+                // consideração o tempo de leitura do comando
                 _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
-            }
-            else {
+            } else {
                 _rb_transmitted.write(NBR14522::NAK);
                 _nak_transmitted++;
                 _state = NAK_ENVIADO;
@@ -88,20 +72,20 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
             // medidor após receber um comando inválido mas com CRC OK.
             // vamos quebrar a sessão.
 
-            // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo de leitura do comando
+            // TODO (MAYBE): calcular valor do próximo ENQ levando em
+            // consideração o tempo de leitura do comando
             _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
         }
         // comando recebido OK
         else {
             // TODO ...
         }
-
-
     }
 
     void _readNextPieceOfComando() {
         if (_rb_received.toread() <= 0) {
-            // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo das leituras dos bytes anteriores
+            // TODO (MAYBE): calcular valor do próximo ENQ levando em
+            // consideração o tempo das leituras dos bytes anteriores
             _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
             return;
         }
@@ -116,9 +100,9 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
         if (_comandoIndex == COMANDO_SZ) {
             _comandoIndex = 0;
             _comandoRecebido();
-        }
-        else {
-            _tasks.addTask(std::bind(_readNextPieceOfComando, this), TMAXCAR_MSEC);
+        } else {
+            _tasks.addTask(std::bind(_readNextPieceOfComando, this),
+                           TMAXCAR_MSEC);
         }
     }
 
@@ -137,23 +121,23 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
 
     void timedOutTMAXRSP() {
         switch (_state) {
-            case NAK_ENVIADO:
-                if (_rb_received.toread() <= 0) {
-                    // TODO (MAYBE): calculate next ENQ regarding the last bytes txed
-                    _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
-                }
-                else {
-                    _comandoIndex = 0;
-                    _readPieceOfComando();
-                }
-                break;
+        case NAK_ENVIADO:
+            if (_rb_received.toread() <= 0) {
+                // TODO (MAYBE): calculate next ENQ regarding the last bytes
+                // txed
+                _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
+            } else {
+                _comandoIndex = 0;
+                _readPieceOfComando();
+            }
+            break;
         }
     }
 
     void _ENQ() {
         // discard all bytes received so far
         _flush(_rb_received);
-        
+
         // send ENQ
         _rb_transmitted.write(NBR14522::ENQ);
 
@@ -184,14 +168,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
     }
 
   public:
+    MedidorSimulado() { _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC); }
 
-    MedidorSimulado() {
-        _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
-    }
-    
-    [[noreturn]] void run() {
-        _tasks.run();
-    }
-
+    [[noreturn]] void run() { _tasks.run(); }
 };
-

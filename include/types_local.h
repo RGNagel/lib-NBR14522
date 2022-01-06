@@ -17,8 +17,11 @@ constexpr size_t RESPOSTA_SZ = 258;
 typedef std::array<byte_t, COMANDO_SZ> comando_t;
 typedef std::array<byte_t, RESPOSTA_SZ> resposta_t;
 typedef std::array<byte_t, 3> leitor_num_serie_t;
+typedef std::array<byte_t, 4> medidor_num_serie_t;
 
 template <size_t S> uint16_t getCRC(std::array<byte_t, S>& cmd_ou_rsp);
+inline medidor_num_serie_t getNumSerieMedidor(resposta_t& resposta);
+inline medidor_num_serie_t getNumSerieMedidor(resposta_t& resposta);
 
 inline bool isValidCodeCommand(byte_t code);
 
@@ -27,6 +30,12 @@ template <size_t S> uint16_t getCRC(std::array<byte_t, S>& cmd_ou_rsp) {
     byte_t lsb = cmd_ou_rsp.at(S - 2);
 
     return static_cast<uint16_t>((msb << 8) + lsb);
+}
+
+inline medidor_num_serie_t getNumSerieMedidor(resposta_t& resposta) {
+    medidor_num_serie_t num = {resposta.at(1), resposta.at(2), resposta.at(3),
+                               resposta.at(4)};
+    return num;
 }
 
 inline bool isValidCodeCommand(byte_t code) {
@@ -51,8 +60,8 @@ constexpr uint32_t BAUDRATE = 9600;
 // dados, 1 stop): 10/9600baud = ~1,042 ms
 constexpr uint32_t TCAR_MSEC = 1;
 
-// TENTCAR: tempo entre os start bits de dois caracteres consecutivos de um mesmo COMANDO ou RESPOSTA
-// TMAXCAR: tempo máximo que TENTCAR pode ter
+// TENTCAR: tempo entre os start bits de dois caracteres consecutivos de um
+// mesmo COMANDO ou RESPOSTA TMAXCAR: tempo máximo que TENTCAR pode ter
 constexpr uint32_t TMAXCAR_MSEC = TCAR_MSEC + 5;
 
 // TREV (reversão): tempo entre inicio do start bit do último caracter recebido
