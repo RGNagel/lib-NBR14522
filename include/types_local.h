@@ -93,4 +93,4 @@ enum Regra {
     TSEMWAIT_SEC = 305,
 };
 
-}; // namespace NBR14522
+} // namespace NBR14522

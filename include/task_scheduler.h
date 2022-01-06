@@ -1,5 +1,8 @@
 #pragma once
 
+#include <thread>
+#include <chrono>
+
 #include <functional>
 #include <map>
 typedef uint32_t tick_t;

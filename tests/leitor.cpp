@@ -41,7 +41,7 @@ class Leitor {
     }
 };
 
-}; // namespace NBR14522
+} // namespace NBR14522
 
 using namespace NBR14522;
 
