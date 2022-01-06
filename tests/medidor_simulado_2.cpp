@@ -73,13 +73,13 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
                 // quebra de sequencia o medidor envia o ENQ
                 _nak_transmitted = 0;
                 // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo de leitura do comando
-                _tasks.addTask(std:;bind(_ENQ, this), TMINENQ_MSEC);
+                _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
             }
             else {
                 _rb_transmitted.write(NBR14522::NAK);
                 _nak_transmitted++;
                 _state = NAK_ENVIADO;
-                _tasks.addTask(std::bind(hasByteWithinTMAXRSP, this), TMAXRSP_MSEC);
+                _tasks.addTask(std::bind(timedOutTMAXRSP, this), TMAXRSP_MSEC);
             }
         }
         // verifica se o comando recebido existe e/ou é valido
@@ -89,7 +89,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
             // vamos quebrar a sessão.
 
             // TODO (MAYBE): calcular valor do próximo ENQ levando em consideração o tempo de leitura do comando
-            _tasks.addTask(std:;bind(_ENQ, this), TMINENQ_MSEC);
+            _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
         }
         // comando recebido OK
         else {
@@ -122,7 +122,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
         }
     }
 
-    void hasByteWithinTMAXSINC() {
+    void timedOutTMAXSINC() {
 
         if (_rb_received.toread() <= 0) {
             _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC - TMAXSINC_MSEC);
@@ -135,13 +135,19 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
         _readPieceOfComando();
     }
 
-    void hasByteWithinTMAXRSP() {
+    void timedOutTMAXRSP() {
         switch (_state) {
             case NAK_ENVIADO:
-                
+                if (_rb_received.toread() <= 0) {
+                    // TODO (MAYBE): calculate next ENQ regarding the last bytes txed
+                    _tasks.addTask(std::bind(_ENQ, this), TMINENQ_MSEC);
+                }
+                else {
+                    _comandoIndex = 0;
+                    _readPieceOfComando();
+                }
                 break;
         }
-        
     }
 
     void _ENQ() {
@@ -154,7 +160,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
         // de acordo com a norma, deveriamos receber o primeiro byte de
         // dado após no máximo ~TMAXSINC_MSEC depois de enviar o
         // ENQ.
-        _tasks.addTask(std::bind(hasByteWithinTMAXSINC, this), TMAXSINC_MSEC);
+        _tasks.addTask(std::bind(timedOutTMAXSINC, this), TMAXSINC_MSEC);
     }
 
   protected:
