@@ -21,3 +21,4 @@ uint16_t CRC16(const byte_t* data, const size_t data_sz) {
 
     return crc;
 }
+
