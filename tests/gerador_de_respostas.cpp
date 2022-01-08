@@ -11,7 +11,7 @@ void _CHECK_CRC(resposta_t& resposta) {
 }
 
 TEST_CASE("Gerador") {
-    GeradorDeRespostas gerador();
+    GeradorDeRespostas gerador;
 
     comando_t comando;
     resposta_t resposta;

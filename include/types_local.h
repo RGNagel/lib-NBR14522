@@ -32,6 +32,12 @@ template <size_t S> uint16_t getCRC(std::array<byte_t, S>& cmd_ou_rsp) {
     return static_cast<uint16_t>((msb << 8) + lsb);
 }
 
+template <size_t S>
+void setCRC(std::array<byte_t, S>& cmd_ou_rsp, uint16_t crc) {
+    cmd_ou_rsp.at(cmd_ou_rsp.size() - 1) = (crc & 0xFF00) >> 8;
+    cmd_ou_rsp.at(cmd_ou_rsp.size() - 2) = (crc & 0x00FF);
+}
+
 inline medidor_num_serie_t getNumSerieMedidor(resposta_t& resposta) {
     medidor_num_serie_t num = {resposta.at(1), resposta.at(2), resposta.at(3),
                                resposta.at(4)};
