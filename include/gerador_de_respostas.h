@@ -40,18 +40,18 @@ class GeradorDeRespostas {
         return _quantidadeDeRespostas;
     }
 
-    bool getNextResposta(NBR14522::resposta_t* res) {
+    bool getNextResposta(NBR14522::resposta_t &res) {
 
         if (_respostaIndex == _quantidadeDeRespostas)
             return false;
 
-        res->at(0) = _code;
-        res->at(1) = _serie.at(0);
-        res->at(2) = _serie.at(1);
-        res->at(3) = _serie.at(2);
-        res->at(4) = _serie.at(3);
+        res.at(0) = _code;
+        res.at(1) = _serie.at(0);
+        res.at(2) = _serie.at(1);
+        res.at(3) = _serie.at(2);
+        res.at(4) = _serie.at(3);
         // TODO completar o resto da resposta com dados dummy
-        NBR14522::setCRC(*res, CRC16(res->data(), res->size() - 2));
+        NBR14522::setCRC(res, CRC16(res.data(), res.size() - 2));
 
         _respostaIndex++;
 

@@ -26,10 +26,16 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
 
     TaskScheduler _tasks;
     uint8_t _nak_transmitted = 0;
+    uint8_t _nak_received = 0;
 
     // comando vindo do leitor
     comando_t _comando;
     size_t _comandoIndex = 0;
+
+    // variaveis relacionadas a(s) resposta(s) dadas pelo medidor
+    GeradorDeRespostas _gerador;
+    uint16_t _quantidadeDeRespostas;
+    resposta_t _nextResposta;
 
     enum {
         CONECTADO,
@@ -83,7 +89,27 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
         // comando recebido OK
         else {
             // TODO ...
+            _quantidadeDeRespostas = _gerador.gerar(_comando);
+
+            _gerador.getNextResposta(_nextResposta);
+            _sendResposta(_nextResposta);
+            _quantidadeDeRespostas--;
+
         }
+    }
+
+    void _sendResposta(const resposta_t &resposta) {
+        // garante que nenhum lixo esteja presente se nao pode ser confundido
+        // com o ACK/NAK esperado
+        _flush(_rb_received);
+
+        _nak_received = 0;
+
+        for (size_t i = 0; i < resposta.size(); i++)
+            _rb_transmitted.write(resposta.at(i));
+
+        _tasks.addTask(std::bind(&MedidorSimulado::timedOutTMAXRSP, this), TMAXRSP_MSEC);
+        _state = RESPOSTA_ENVIADA;
     }
 
     void _readNextPieceOfComando() {
@@ -139,6 +165,49 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
                 _readPieceOfComando();
             }
             break;
+        case RESPOSTA_ENVIADA:
+            if (_rb_received.toread() <= 0) {
+                // NBR14522: "se após o tempo permitido para a leitora enviar o
+                // ACK este ainda não foi enviado, o medidor deve enviar ENQ
+                // aguardando o recebimento do ACK"
+
+                _tasks.addTask(std::bind(&MedidorSimulado::_ENQ, this));
+                return;
+            } 
+            
+            switch (_rb_received.read()) {
+                case ACK:
+                    if (_quantidadeDeRespostas <= 0) {
+                        // todas respostas enviadas
+                        _state = CONECTADO;
+                        _tasks.addTask(std::bind(&MedidorSimulado::_ENQ, this));
+                        return;
+                    }
+
+                    _gerador.getNextResposta(_nextResposta);
+                    _sendResposta(_nextResposta);
+                    _quantidadeDeRespostas--;
+
+                    break;
+                case NAK:
+                    _nak_received++;
+
+                    if (_nak_received >= MAX_BLOCO_NAK) {
+                        _state = CONECTADO;
+                        _tasks.addTask(std::bind(&MedidorSimulado::_ENQ, this));
+                        return;
+                    } 
+                
+                    _sendResposta(_nextResposta);
+                
+                    break;
+                default:
+                    _state = CONECTADO;
+                    _tasks.addTask(std::bind(&MedidorSimulado::_ENQ, this));
+                    
+                    break;
+            }
+            break;
         }
     }
 
@@ -157,7 +226,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
     }
 
   protected:
-    // _write() e _read() são chamadas pelo leitor somente
+    // _write() e _read() são chamadas pelo leitor somente (API)
 
     size_t _write(const byte_t* data, const size_t data_sz) {
         // data coming from leitor
@@ -177,7 +246,7 @@ template <size_t readBufferLen> class MedidorSimulado : public IPorta {
     }
 
   public:
-    MedidorSimulado() {
+    MedidorSimulado(NBR14522::medidor_num_serie_t medidor) : _gerador(medidor) {
         _tasks.addTask(std::bind(&MedidorSimulado::_ENQ, this), TMINENQ_MSEC);
     }
 
