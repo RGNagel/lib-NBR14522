@@ -40,7 +40,7 @@ class GeradorDeRespostas {
         return _quantidadeDeRespostas;
     }
 
-    bool getNextResposta(NBR14522::resposta_t &res) {
+    bool getNextResposta(NBR14522::resposta_t& res) {
 
         if (_respostaIndex == _quantidadeDeRespostas)
             return false;

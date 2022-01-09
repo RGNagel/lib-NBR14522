@@ -29,7 +29,6 @@ class TaskScheduler {
     tick_t _counter;
     milliseconds_t _tickPeriod;
     std::multimap<tick_t, std::function<void()>> _tasks;
-    bool _stop = false;
 
   public:
     TaskScheduler(milliseconds_t tickPeriod = 10)
@@ -58,6 +57,3 @@ class TaskScheduler {
         }
     }
 };
-
-
-
