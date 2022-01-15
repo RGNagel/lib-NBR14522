@@ -1,7 +1,7 @@
 #include "doctest/doctest.h"
 #include <CRC.h>
 #include <gerador_de_respostas.h>
-#include <types_local.h>
+#include <NBR14522.h>
 using namespace NBR14522;
 
 void _CHECK_CRC(resposta_t& resposta) {

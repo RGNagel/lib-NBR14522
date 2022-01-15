@@ -1,6 +1,6 @@
 #pragma once
 
-#include <types_local.h>
+#include <NBR14522.h>
 
 template <typename T, size_t S> class RingBuffer {
   private:

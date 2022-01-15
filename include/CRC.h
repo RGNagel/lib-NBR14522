@@ -1,6 +1,6 @@
 #pragma once
 
-#include <types_local.h>
+#include <NBR14522.h>
 
 // NBR14522 uses CRC16 (X16 + X15 + X2 + 1) i.e. 0x8005 (MSB-first code) or
 // 0xA001 (LSB-first code)

@@ -1,7 +1,7 @@
 #include "doctest/doctest.h"
 #include <CRC.h>
 #include <array>
-#include <types_local.h>
+#include <NBR14522.h>
 
 // https://crccalc.com/ (CRC-16/ARC)
 

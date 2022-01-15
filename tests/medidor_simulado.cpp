@@ -7,7 +7,7 @@
 #include <ring_buffer.h>
 #include <string.h>
 #include <task_scheduler.h>
-#include <types_local.h>
+#include <NBR14522.h>
 #include <thread>
 
 using namespace NBR14522;
@@ -261,7 +261,7 @@ TEST_CASE("Medidor Simulado") {
 
     std::thread t1(&MedidorSimulado::run, &medidor);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(TMINENQ_MSEC*2));
+    // std::this_thread::sleep_for(std::chrono::milliseconds(TMINENQ_MSEC*2));
 
     // std::array<byte_t, 258> data;
     // data.fill(0x00);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <types_local.h>
+#include <NBR14522.h>
 
 class IPorta {
   public:

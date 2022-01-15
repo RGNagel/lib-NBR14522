@@ -6,7 +6,7 @@
 #include <icomando.h>
 #include <ileitor.h>
 #include <iporta.h>
-#include <types_local.h>
+#include <NBR14522.h>
 
 #include <leitura_padrao.h>
 
