@@ -1,16 +1,16 @@
 #pragma once
 
 #include <chrono>
-#include <thread>
-
 #include <functional>
 #include <map>
+#include <thread>
+#include <timer.h>
+
 typedef uint32_t tick_t;
-typedef uint32_t milliseconds_t;
 typedef int task_t;
 
-inline tick_t miliseconds2ticks(const milliseconds_t ms,
-                                const milliseconds_t tickPeriod) {
+inline tick_t ms2ticks(const milliseconds_t ms,
+                       const milliseconds_t tickPeriod) {
     if (ms == 0 || tickPeriod == 0 || ms < tickPeriod)
         return 0;
 
@@ -24,20 +24,33 @@ inline tick_t miliseconds2ticks(const milliseconds_t ms,
     return retval;
 }
 
-class TaskScheduler {
+template <milliseconds_t tick_period = 1, size_t tasks_sz = 8> class TaskScheduler {
   private:
     tick_t _counter;
-    milliseconds_t _tickPeriod;
-    std::multimap<tick_t, std::function<void()>> _tasks;
+    
+    typedef struct {
+        std::function<void()> fun;
+        tick_t triggerAt;
+    } task_t;
+
+    std::array<task_t, tasks_sz> _tasks;
 
   public:
-    TaskScheduler(milliseconds_t tickPeriod = 10)
-        : _counter(0), _tickPeriod(tickPeriod) {}
+    TaskScheduler() : _counter(0) {
+        _tasks.fill({nullptr,0});
+    }
 
     void addTask(std::function<void()> callback,
                  milliseconds_t waitAtLeast = 0) {
-        tick_t key = _counter + miliseconds2ticks(waitAtLeast, _tickPeriod);
-        _tasks.insert({key, callback});
+        tick_t triggerAt = _counter + ms2ticks(waitAtLeast, tick_period);
+
+        for (auto t = _tasks.begin(); t != _tasks.end(); t++) {
+            if (!t->fun) {
+                t->fun = callback;
+                t->triggerAt = triggerAt;
+                break;
+            }
+        }
     }
 
     [[noreturn]] void run() {
@@ -45,17 +58,19 @@ class TaskScheduler {
 
             if (_tasks.size() <= 0) {
                 _counter = 0;
-                continue;
+            } else {
+
+                for (auto i = _tasks.begin(); i != _tasks.end(); i++) {
+                    if (i->fun && i->triggerAt <= _counter) {
+                        i->fun();
+                        i->fun = nullptr;
+                    }
+                }
+
+                _counter++;
             }
 
-            for (auto i = _tasks.find(_counter); i->first == _counter; i++) {
-                i->second();
-            }
-
-            // TODO remove task
-
-            _counter++;
-            std::this_thread::sleep_for(std::chrono::milliseconds(_tickPeriod));
+            Timer::wait(tick_period);
         }
     }
 };
