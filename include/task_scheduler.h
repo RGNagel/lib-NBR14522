@@ -52,6 +52,8 @@ class TaskScheduler {
                 i->second();
             }
 
+            // TODO remove task
+
             _counter++;
             std::this_thread::sleep_for(std::chrono::milliseconds(_tickPeriod));
         }

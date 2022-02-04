@@ -2,8 +2,8 @@
 #include "doctest/doctest.h"
 
 // #include <leitor.h>
-#include <iporta.h>
 #include <NBR14522.h>
+#include <iporta.h>
 
 namespace NBR14522 {
 

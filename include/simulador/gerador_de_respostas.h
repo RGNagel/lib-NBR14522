@@ -1,7 +1,7 @@
 #pragma once
 
-#include <random>
 #include <NBR14522.h>
+#include <random>
 
 class GeradorDeRespostas {
   private:
