@@ -1,9 +1,9 @@
 #pragma once
 
 #include <NBR14522.h>
-#include <task_scheduler.h>
 #include <iporta.h>
 #include <ring_buffer.h>
+#include <task_scheduler.h>
 
 #include "gerador_de_respostas.h"
 
@@ -24,7 +24,6 @@ class Medidor : public IPorta {
     RingBuffer<byte_t, 1024> _rb_received;
     RingBuffer<byte_t, 1024> _rb_transmitted;
 
-    TaskScheduler _tasks;
     uint8_t _nak_transmitted = 0;
     uint8_t _nak_received = 0;
 
@@ -36,6 +35,8 @@ class Medidor : public IPorta {
     GeradorDeRespostas _gerador;
     uint16_t _quantidadeDeRespostas;
     resposta_t _nextResposta;
+
+    TaskScheduler<1> _tasks;
 
     enum {
         CONECTADO,
@@ -139,7 +140,6 @@ class Medidor : public IPorta {
     }
 
     void timedOutTMAXSINC() {
-
         if (_rb_received.toread() <= 0) {
             _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
                            TMINENQ_MSEC - TMAXSINC_MSEC);
@@ -208,6 +208,8 @@ class Medidor : public IPorta {
                 break;
             }
             break;
+        default:
+            break;
         }
     }
 
@@ -218,7 +220,7 @@ class Medidor : public IPorta {
         // send ENQ
         _rb_transmitted.write(NBR14522::ENQ);
 
-        // de acordo com a norma, deveriamos receber o primeiro byte de
+        // de acordo com a norma, deveriamos receber o PRIMEIRO byte de
         // dado após no máximo ~TMAXSINC_MSEC depois de enviar o
         // ENQ.
         _tasks.addTask(std::bind(&Simulador::Medidor::timedOutTMAXSINC, this),
@@ -229,7 +231,7 @@ class Medidor : public IPorta {
     // _write() e _read() são chamadas pelo leitor somente (API)
 
     size_t _write(const byte_t* data, const size_t data_sz) {
-        // data coming from leitor
+        // dados vindo do "leitor"
 
         for (size_t i = 0; i < data_sz; i++)
             _rb_received.write(data[i]);
@@ -238,6 +240,8 @@ class Medidor : public IPorta {
     }
 
     size_t _read(byte_t* data, const size_t max_data_sz) {
+        // dados lidos do medidor
+        
         size_t until = MIN(max_data_sz, _rb_transmitted.toread());
         for (size_t i = 0; i < until; i++)
             data[i] = _rb_transmitted.read();
@@ -247,8 +251,9 @@ class Medidor : public IPorta {
 
   public:
     Medidor(NBR14522::medidor_num_serie_t medidor = {1, 2, 3, 4})
-        : _gerador(medidor), _tasks(1) {
-        _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this), TMINENQ_MSEC);
+        : _gerador(medidor), _tasks() {
+        _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
+                       TMINENQ_MSEC);
     }
 
     [[noreturn]] void run() { _tasks.run(); }

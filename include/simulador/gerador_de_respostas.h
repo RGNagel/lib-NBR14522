@@ -1,5 +1,6 @@
 #pragma once
 
+#include <CRC.h>
 #include <NBR14522.h>
 #include <random>
 
