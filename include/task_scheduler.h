@@ -7,7 +7,6 @@
 #include <timer.h>
 
 typedef uint32_t tick_t;
-typedef int task_t;
 
 inline tick_t ms2ticks(const milliseconds_t ms,
                        const milliseconds_t tickPeriod) {
@@ -24,21 +23,21 @@ inline tick_t ms2ticks(const milliseconds_t ms,
     return retval;
 }
 
-template <milliseconds_t tick_period = 1, size_t tasks_sz = 8> class TaskScheduler {
+template <milliseconds_t tick_period = 1, size_t tasks_sz = 8>
+class TaskScheduler {
   private:
     tick_t _counter;
-    
-    typedef struct {
+
+    using Task = struct {
         std::function<void()> fun;
         tick_t triggerAt;
-    } task_t;
+    };
 
-    std::array<task_t, tasks_sz> _tasks;
+    std::array<Task, tasks_sz> _tasks;
+    bool _stop;
 
   public:
-    TaskScheduler() : _counter(0) {
-        _tasks.fill({nullptr,0});
-    }
+    TaskScheduler() : _counter(0), _stop(false) { _tasks.fill({nullptr, 0}); }
 
     void addTask(std::function<void()> callback,
                  milliseconds_t waitAtLeast = 0) {
@@ -53,8 +52,12 @@ template <milliseconds_t tick_period = 1, size_t tasks_sz = 8> class TaskSchedul
         }
     }
 
-    [[noreturn]] void run() {
+    void run() {
+        _stop = false;
+
         while (1) {
+            if (_stop)
+                break;
 
             if (_tasks.size() <= 0) {
                 _counter = 0;
@@ -73,4 +76,6 @@ template <milliseconds_t tick_period = 1, size_t tasks_sz = 8> class TaskSchedul
             Timer::wait(tick_period);
         }
     }
+
+    void runStop() { _stop = true; }
 };
