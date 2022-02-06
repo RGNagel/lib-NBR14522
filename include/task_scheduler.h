@@ -8,9 +8,11 @@
 using namespace std::literals;
 
 /**
- * @brief 
- * 
- * @tparam clock_type    std::chrono clock. Para sistemas embarcados deve-se criar um novo. Veja ref.: https://stackoverflow.com/questions/46736323/using-chrono-as-a-timer-in-bare-metal-microcontroller
+ * @brief
+ *
+ * @tparam clock_type    std::chrono clock. Para sistemas embarcados deve-se
+ * criar um novo. Veja ref.:
+ * https://stackoverflow.com/questions/46736323/using-chrono-as-a-timer-in-bare-metal-microcontroller
  * @tparam tasks_sz      quantidade máxima de tarefas
  */
 

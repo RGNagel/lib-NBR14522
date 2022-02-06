@@ -1,7 +1,5 @@
 #pragma once
 
-// TODO: mudar o nome deste header para NBR14522.h
-
 #include <array>
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
