@@ -36,7 +36,7 @@ class Medidor : public IPorta {
     uint16_t _quantidadeDeRespostas;
     resposta_t _nextResposta;
 
-    TaskScheduler<1> _tasks;
+    TaskScheduler<> _tasks;
 
     enum {
         CONECTADO,
@@ -66,14 +66,14 @@ class Medidor : public IPorta {
                 // TODO (MAYBE): calcular valor do próximo ENQ levando em
                 // consideração o tempo de leitura do comando
                 _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                               TMINENQ_MSEC);
+                               std::chrono::milliseconds(TMINENQ_MSEC));
             } else {
                 _rb_transmitted.write(NBR14522::NAK);
                 _nak_transmitted++;
                 _state = NAK_ENVIADO;
                 _tasks.addTask(
                     std::bind(&Simulador::Medidor::timedOutTMAXRSP, this),
-                    TMAXRSP_MSEC);
+                    std::chrono::milliseconds(TMAXRSP_MSEC));
             }
         }
         // verifica se o comando recebido existe e/ou é valido
@@ -85,7 +85,7 @@ class Medidor : public IPorta {
             // TODO (MAYBE): calcular valor do próximo ENQ levando em
             // consideração o tempo de leitura do comando
             _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                           TMINENQ_MSEC);
+                           std::chrono::milliseconds(TMINENQ_MSEC));
         }
         // comando recebido OK
         else {
@@ -109,7 +109,7 @@ class Medidor : public IPorta {
             _rb_transmitted.write(resposta.at(i));
 
         _tasks.addTask(std::bind(&Simulador::Medidor::timedOutTMAXRSP, this),
-                       TMAXRSP_MSEC);
+                       std::chrono::milliseconds(TMAXRSP_MSEC));
         _state = RESPOSTA_ENVIADA;
     }
 
@@ -118,7 +118,7 @@ class Medidor : public IPorta {
             // TODO (MAYBE): calcular valor do próximo ENQ levando em
             // consideração o tempo das leituras dos bytes anteriores
             _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                           TMINENQ_MSEC);
+                           std::chrono::milliseconds(TMINENQ_MSEC));
             return;
         }
 
@@ -135,14 +135,15 @@ class Medidor : public IPorta {
         } else {
             _tasks.addTask(
                 std::bind(&Simulador::Medidor::_readNextPieceOfComando, this),
-                TMAXCAR_MSEC);
+                std::chrono::milliseconds(TMAXCAR_MSEC));
         }
     }
 
     void timedOutTMAXSINC() {
         if (_rb_received.toread() <= 0) {
-            _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                           TMINENQ_MSEC - TMAXSINC_MSEC);
+            _tasks.addTask(
+                std::bind(&Simulador::Medidor::_ENQ, this),
+                std::chrono::milliseconds(TMINENQ_MSEC - TMAXSINC_MSEC));
             return;
         }
 
@@ -159,7 +160,7 @@ class Medidor : public IPorta {
                 // TODO (MAYBE): calculate next ENQ regarding the last bytes
                 // txed
                 _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                               TMINENQ_MSEC);
+                               std::chrono::milliseconds(TMINENQ_MSEC));
             } else {
                 _comandoIndex = 0;
                 _readPieceOfComando();
@@ -224,7 +225,7 @@ class Medidor : public IPorta {
         // dado após no máximo ~TMAXSINC_MSEC depois de enviar o
         // ENQ.
         _tasks.addTask(std::bind(&Simulador::Medidor::timedOutTMAXSINC, this),
-                       TMAXSINC_MSEC);
+                       std::chrono::milliseconds(TMAXSINC_MSEC));
     }
 
   protected:
@@ -241,7 +242,7 @@ class Medidor : public IPorta {
 
     size_t _read(byte_t* data, const size_t max_data_sz) {
         // dados lidos do medidor
-        
+
         size_t until = MIN(max_data_sz, _rb_transmitted.toread());
         for (size_t i = 0; i < until; i++)
             data[i] = _rb_transmitted.read();
@@ -253,10 +254,11 @@ class Medidor : public IPorta {
     Medidor(NBR14522::medidor_num_serie_t medidor = {1, 2, 3, 4})
         : _gerador(medidor), _tasks() {
         _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                       TMINENQ_MSEC);
+                       std::chrono::milliseconds(TMINENQ_MSEC));
     }
 
-    [[noreturn]] void run() { _tasks.run(); }
+    void run() { _tasks.run(); }
+    void runStop() { _tasks.runStop(); }
 };
 
 } // namespace Simulador
