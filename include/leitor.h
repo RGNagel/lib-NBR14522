@@ -81,11 +81,9 @@ class Leitor {
         _setEstado(ESPERANDO_RESPOSTA);
     }
 
-    void _tentaSincronizar(std::chrono::milliseconds timeout) {
+    void _tentaSincronizarPeriodicamente() {
         // tentar sincronizar com medidor periodicamente até conseguir
-        // sincronizar ou estourar o timeout
-
-        std::chrono::duration elapsed = 0ms;
+        // sincronizar
 
         byte_t data;
         size_t read = _porta->read(&data, 1);
@@ -94,16 +92,10 @@ class Leitor {
         } else {
             std::chrono::milliseconds tryAgainIn =
                 static_cast<std::chrono::milliseconds>(TMINENQ_MSEC / 4);
-            elapsed += tryAgainIn;
 
-            if (elapsed < timeout) {
-                _tasks.addTask(
-                    std::bind(&Leitor::_tentaSincronizar, this, timeout),
-                    tryAgainIn);
-            } else {
-                // timed out
-                _setEstado(SINCRONIZACAO_FALHOU);
-            }
+            _tasks.addTask(
+                std::bind(&Leitor::_tentaSincronizarPeriodicamente, this),
+                tryAgainIn);
         }
     }
 
@@ -193,7 +185,16 @@ class Leitor {
         _callbackDeResposta = cb_rsp_received;
         _setEstado(DESCONECTADO);
         _tasks.addTask(
-            std::bind(&Leitor::_tentaSincronizar, this, MIN(2s, timeout)));
+            std::bind(&Leitor::_tentaSincronizarPeriodicamente, this));
+        _tasks.addTask(
+            [this]() {
+                if (this->_getEstado() == DESCONECTADO) {
+                    this->_setEstado(SINCRONIZACAO_FALHOU);
+                    this->_tasks.runStop();
+                }
+            },
+            timeout);
+
         _tasks.run();
 
         return _getEstado();
