@@ -7,6 +7,7 @@
 
 using namespace std::literals;
 
+// TEST_CASE("class TaskScheduler" * doctest::skip()) {
 TEST_CASE("class TaskScheduler") {
     TaskScheduler<> ts;
 
@@ -43,18 +44,21 @@ TEST_CASE("class TaskScheduler") {
         CHECK(t3 == 0);
 
         std::this_thread::sleep_for(50ms);
+        std::this_thread::sleep_for(5ms); // add extra delay to assure process has enough time to execute it
 
         CHECK(t1 == 1);
         CHECK(t2 == 0);
         CHECK(t3 == 0);
 
         std::this_thread::sleep_for(50ms);
+        std::this_thread::sleep_for(5ms); // add extra delay to assure process has enough time to execute it
 
         CHECK(t1 == 1);
         CHECK(t2 == 1);
         CHECK(t3 == 0);
 
         std::this_thread::sleep_for(50ms);
+        std::this_thread::sleep_for(5ms); // add extra delay to assure process has enough time to execute it
 
         CHECK(t1 == 1);
         CHECK(t2 == 1);
