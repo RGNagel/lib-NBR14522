@@ -47,7 +47,6 @@ class TaskScheduler {
     }
 
     void run() {
-        _stop = false;
 
         while (1) {
             if (_stop)
@@ -60,6 +59,8 @@ class TaskScheduler {
                 }
             }
         }
+        
+        _stop = false;
     }
 
     void runStop() { _stop = true; }
