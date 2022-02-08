@@ -51,10 +51,30 @@ class Leitor {
             break;
         case RESPOSTA_RECEBIDA:
             _callbackDeResposta(_resposta);
-            stopTasks = true;
-            // TODO composed cmds
+
+            if (!isComposedCodeCommand(_resposta.at(0))) {
+                // os unicos 3 comandos compostos existentes na norma (0x26,
+                // 0x27 e 0x52) possuem o octeto 006 (5o byte), cujo valor:
+                // 0N -> resposta/bloco intermediário
+                // 1N -> resposta/bloco final
+
+                if (_resposta.at(5) & 0x10) {
+                    // resposta final do comando composto
+                    stopTasks = true;
+                } else {
+                    // resposta intermediária, aguarda próxima resposta
+                    _setEstado(ESPERANDO_RESPOSTA);
+                }
+
+            } else {
+                // comando simples, e unica resposta foi recebida
+                stopTasks = true;
+            }
             break;
         case ESPERANDO_RESPOSTA:
+            // TODO: é possivel otimizar esse trecho, colocando TMAXRSP somente
+            // como timeout e um loop/task periodico de tempo menor p/ checar se
+            // recebeu a resposta.
             _respostaIndex = 0;
             _tasks.addTask(std::bind(&Leitor::_readPieceOfResposta, this),
                            std::chrono::milliseconds(TMAXRSP_MSEC));
