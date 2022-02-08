@@ -51,6 +51,8 @@ class Leitor {
             break;
         case RESPOSTA_RECEBIDA:
             _callbackDeResposta(_resposta);
+            stopTasks = true;
+            // TODO composed cmds
             break;
         case ESPERANDO_RESPOSTA:
             _respostaIndex = 0;

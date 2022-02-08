@@ -8,17 +8,23 @@
 #include <simulador/medidor.h>
 
 using namespace NBR14522;
-// using std::literals;
 
 TEST_CASE("leitor com medidor simulado") {
 
-    std::shared_ptr<Simulador::Medidor> porta;
-    Leitor leitor(porta);
+    std::shared_ptr<Simulador::Medidor> medidor = std::make_shared<Simulador::Medidor>();
 
-    comando_t comando;
-    comando.at(0) = 0x14;
-    leitor.tx(comando, [](resposta_t &rsp) {
-        // CHECK();
-    }, 2000ms);
+    std::thread t1(&Simulador::Medidor::run, medidor);
 
+    SUBCASE("0x14") {
+        Leitor leitor(medidor);
+
+        comando_t comando;
+        comando.at(0) = 0x14;
+        leitor.tx(comando, [](resposta_t &rsp) {
+            CHECK(rsp.at(0) == 0x14);
+        }, 2000ms);
+    }
+
+    medidor->runStop();
+    t1.join();
 }
