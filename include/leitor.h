@@ -20,7 +20,9 @@ class Leitor {
         NAK_RX_EXCEDIDO,
         TEMPO_EXCEDIDO,
         RESPOSTA_CODIGO_INVALIDO,
-        SINCRONIZACAO_FALHOU
+        SINCRONIZACAO_FALHOU,
+        RESPOSTA_CODIGO_DIFERE,
+        RESPOSTA_CODIGO_INVALIDO_ENQ
     } estado_t;
 
   private:
@@ -84,6 +86,8 @@ class Leitor {
         case TEMPO_EXCEDIDO:
         case RESPOSTA_CODIGO_INVALIDO:
         case SINCRONIZACAO_FALHOU:
+        case RESPOSTA_CODIGO_DIFERE:
+        case RESPOSTA_CODIGO_INVALIDO_ENQ:
             stopTasks = true;
             break;
         default:
@@ -108,14 +112,12 @@ class Leitor {
         byte_t data;
         size_t read = _porta->read(&data, 1);
         if (read == 1 && data == ENQ) {
+            // após receber o ENQ, temos até TMAXSINC_MSEC para enviar o 1o byte
+            // do comando
             _setEstado(SINCRONIZADO);
         } else {
-            std::chrono::milliseconds tryAgainIn =
-                static_cast<std::chrono::milliseconds>(TMINENQ_MSEC / 4);
-
             _tasks.addTask(
-                std::bind(&Leitor::_tentaSincronizarPeriodicamente, this),
-                tryAgainIn);
+                std::bind(&Leitor::_tentaSincronizarPeriodicamente, this), 5ms);
         }
     }
 
@@ -123,80 +125,109 @@ class Leitor {
         size_t read =
             _porta->read(&_resposta[_respostaIndex], _resposta.size());
 
+        printf("from medidor: ");
+        for (size_t i = 0; i < read; i++) {
+            printf("%x ", _resposta[i]);
+        }
+        printf("\n");
+
         // no data within TMAXRSP or TMAXCAR?
         if (read <= 0) {
             // response from meter has timed out
             _setEstado(TEMPO_EXCEDIDO);
+            return;
         }
-        // check if NAK received
-        else if (_respostaIndex == 0 && _resposta.at(0) == NAK) {
-            _countReceivedNAK++;
-            // devemos enviar novamente o comando ao medidor, caso menos de
-            // 7 NAKs recebidos
-            if (_countReceivedNAK >= MAX_BLOCO_NAK) {
-                _setEstado(NAK_RX_EXCEDIDO);
-            } else {
-                // retransmite comando
-                _transmiteComando(_comando);
-            }
-            // No NAK received
-        } else {
 
-            _respostaIndex += read;
+        // primeiro pedaco recebido?
+        if (_respostaIndex == 0) {
+            // faz checagens de erros
 
-            if (_respostaIndex >= _resposta.size()) {
-                // resposta completa recebida
-                // _respostaRecebida(_resposta);
-                uint16_t crcReceived = getCRC(_resposta);
-                uint16_t crcCalculated =
-                    CRC16(_resposta.data(), _resposta.size() - 2);
-
-                if (crcReceived != crcCalculated) {
-                    // se CRC com erro, o medidor deve enviar um NAK para o
-                    // leitor e aguardar novo COMANDO. O máximo de NAKs
-                    // enviados para um mesmo comando é 7.
-
-                    if (_countTransmittedNAK >= MAX_BLOCO_NAK) {
-                        _setEstado(NAK_TX_EXCEDIDO);
-                    } else {
-                        byte_t sinalizador = NAK;
-                        _porta->write(&sinalizador, 1);
-                        _countTransmittedNAK++;
-
-                        // aguarda retransmissao da resposta pelo medidor
-                        _setEstado(ESPERANDO_RESPOSTA);
-                    }
-                } else if (!isValidCodeCommand(_resposta.at(0)) ||
-                           _comando.at(0) != _resposta.at(0)) {
-                    // a norma não define qual deve ser o comportamento do
-                    // leitor após receber uma resposta inválida mas com CRC
-                    // OK. vamos quebrar a sessão.
-
-                    _setEstado(RESPOSTA_CODIGO_INVALIDO);
+            // check if NAK received
+            if (_resposta.at(0) == NAK) {
+                _countReceivedNAK++;
+                // devemos enviar novamente o comando ao medidor, caso menos de
+                // 7 NAKs recebidos
+                if (_countReceivedNAK >= MAX_BLOCO_NAK) {
+                    _setEstado(NAK_RX_EXCEDIDO);
                 } else {
-                    // resposta recebida está OK!
-
-                    // transmite um ACK para o medidor
-                    byte_t sinalizador = ACK;
-                    _porta->write(&sinalizador, 1);
-
-                    _setEstado(RESPOSTA_RECEBIDA);
+                    // retransmite comando
+                    _transmiteComando(_comando);
                 }
-            } else {
-                // resposta parcial recebida
-                _setEstado(RESPOSTA_PEDACO_RECEBIDO);
+
+                return;
+            }
+
+            // check if ENQ received
+            if (_resposta.at(0) == ENQ) {
+                _setEstado(RESPOSTA_CODIGO_INVALIDO_ENQ);
+                return;
+            }
+
+            // check if codigo invalido
+            if (!isValidCodeCommand(_resposta.at(0))) {
+                printf("codigo invalido: %x\n", _resposta.at(0));
+                _setEstado(RESPOSTA_CODIGO_INVALIDO);
+                return;
+            }
+
+            // check if codigo diferente do enviado
+            if (_resposta.at(0) != _comando.at(0)) {
+                _setEstado(RESPOSTA_CODIGO_DIFERE);
+                return;
             }
         }
+
+        // pedaço recebido OK
+
+        _respostaIndex += read;
+
+        if (_respostaIndex < _resposta.size()) {
+            // resposta parcial recebida
+            _setEstado(RESPOSTA_PEDACO_RECEBIDO);
+            return;
+        }
+
+        // resposta completa recebido. Trata-a.
+
+        uint16_t crcReceived = getCRC(_resposta);
+        uint16_t crcCalculated = CRC16(_resposta.data(), _resposta.size() - 2);
+
+        if (crcReceived != crcCalculated) {
+            // se CRC com erro, o medidor deve enviar um NAK para o
+            // leitor e aguardar novo COMANDO. O máximo de NAKs
+            // enviados para um mesmo comando é 7.
+
+            if (_countTransmittedNAK >= MAX_BLOCO_NAK) {
+                _setEstado(NAK_TX_EXCEDIDO);
+            } else {
+                byte_t sinalizador = NAK;
+                _porta->write(&sinalizador, 1);
+                _countTransmittedNAK++;
+
+                // aguarda retransmissao da resposta pelo medidor
+                _setEstado(ESPERANDO_RESPOSTA);
+            }
+
+            return;
+        }
+
+        // resposta completa recebida está OK!
+
+        // transmite um ACK para o medidor
+        byte_t sinalizador = ACK;
+        _porta->write(&sinalizador, 1);
+
+        _setEstado(RESPOSTA_RECEBIDA);
     }
 
   public:
     Leitor(sptr<IPorta> porta) : _porta(porta) { _setEstado(DESCONECTADO); }
 
-    estado_t tx(comando_t& comando,
-                std::function<void(resposta_t& rsp)> cb_rsp_received,
+    estado_t tx(const comando_t& comando,
+                std::function<void(const resposta_t& rsp)> cb_rsp_received,
                 std::chrono::milliseconds timeout) {
 
-        // discarta todos os bytes até agora do medidor
+        // discarta todos os bytes até agora da porta
         byte_t data;
         while (_porta->read(&data, 1))
             ;
@@ -206,6 +237,8 @@ class Leitor {
         _setEstado(DESCONECTADO);
         _tasks.addTask(
             std::bind(&Leitor::_tentaSincronizarPeriodicamente, this));
+
+        // timeout action
         _tasks.addTask(
             [this]() {
                 if (this->_getEstado() == DESCONECTADO) {
