@@ -35,12 +35,32 @@ TEST_CASE("Medidor Simulado") {
     for (size_t i = 0; i < read; i++)
         CHECK(data.at(i) == ENQ);
 
+    SUBCASE("force all NAKs") {
+        cmd.at(0) = 0x14;
+        setCRC(cmd, 0xDEAD);
+
+        // wait for next ENQ and then send cmd
+        byte_t enq = 0;
+        medidor.read(&enq, 1);
+        while (enq != ENQ) {
+            std::this_thread::sleep_for(5ms);
+            medidor.read(&enq, 1);
+        }
+
+        for (auto i = 0; i < MAX_BLOCO_NAK; i++) {
+            medidor.write(cmd.data(), cmd.size());
+            std::this_thread::sleep_for(std::chrono::milliseconds(TMAXRSP_MSEC));
+            byte_t nak = 0;
+            CHECK(medidor.read(&nak, 1) == 1);
+            CHECK(nak == NAK);
+        }
+    }
+    
     SUBCASE("0x14 valido") {
         cmd.at(0) = 0x14;
         setCRC(cmd, CRC16(cmd.data(), cmd.size() - 2));
 
         // wait for next ENQ and then send cmd
-
         byte_t enq = 0;
         medidor.read(&enq, 1);
         while (enq != ENQ) {
