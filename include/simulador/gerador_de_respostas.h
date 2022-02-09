@@ -2,6 +2,7 @@
 
 #include <CRC.h>
 #include <NBR14522.h>
+#include <BCD.h>
 #include <random>
 
 class GeradorDeRespostas {
@@ -11,6 +12,8 @@ class GeradorDeRespostas {
     NBR14522::medidor_num_serie_t _serie;
     uint16_t _respostaIndex;
     uint16_t _quantidadeDeRespostas;
+
+    inline bool _comandoComposto() { return _quantidadeDeRespostas > 1; }
 
   public:
     GeradorDeRespostas(NBR14522::medidor_num_serie_t medidor = {1, 2, 3, 4})
@@ -51,11 +54,29 @@ class GeradorDeRespostas {
         res.at(2) = _serie.at(1);
         res.at(3) = _serie.at(2);
         res.at(4) = _serie.at(3);
+
+        if (_comandoComposto()) {
+
+            uint16_t numeroDoBloco = _respostaIndex + 1;
+            // e.g. bloco nº 234:
+            // octeto006 <- 0x02
+            // octeto007 <- 0x34
+            uint8_t octeto006 = static_cast<uint8_t>(numeroDoBloco / 100);
+            uint8_t octeto007 =
+                static_cast<uint8_t>(numeroDoBloco - 100*octeto006);
+            
+            res.at(5) = dec2bcd(octeto006);
+            res.at(6) = dec2bcd(octeto007);
+
+            // ultimo bloco/resposta do comando composto?
+            if ((_respostaIndex + 1) == _quantidadeDeRespostas)
+                res.at(5) |= 0x10;
+        }
+
         // TODO completar o resto da resposta com dados dummy
+
         NBR14522::setCRC(res, CRC16(res.data(), res.size() - 2));
-
         _respostaIndex++;
-
         return true;
     }
 };
