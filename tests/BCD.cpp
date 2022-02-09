@@ -1,5 +1,5 @@
-#include <doctest/doctest.h>
 #include <BCD.h>
+#include <doctest/doctest.h>
 
 TEST_CASE("bcd2dec") {
     CHECK(0 == bcd2dec(0x00));
