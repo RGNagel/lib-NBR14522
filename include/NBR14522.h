@@ -56,6 +56,13 @@ inline bool isValidCodeCommand(byte_t code) {
     return false;
 }
 
+inline bool isComposedCodeCommand(byte_t code) {
+    if (code == 0x26 || code == 0x27 || code == 0x52)
+        return true;
+    else
+        return false;
+}
+
 enum Sinalizador { ENQ = 0x05, ACK = 0x06, NAK = 0x15, WAIT = 0x10 };
 
 constexpr uint32_t BAUDRATE = 9600;
