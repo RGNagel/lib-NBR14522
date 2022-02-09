@@ -1,8 +1,8 @@
 #pragma once
 
+#include <BCD.h>
 #include <CRC.h>
 #include <NBR14522.h>
-#include <BCD.h>
 #include <random>
 
 class GeradorDeRespostas {
@@ -63,8 +63,8 @@ class GeradorDeRespostas {
             // octeto007 <- 0x34
             uint8_t octeto006 = static_cast<uint8_t>(numeroDoBloco / 100);
             uint8_t octeto007 =
-                static_cast<uint8_t>(numeroDoBloco - 100*octeto006);
-            
+                static_cast<uint8_t>(numeroDoBloco - 100 * octeto006);
+
             res.at(5) = dec2bcd(octeto006);
             res.at(6) = dec2bcd(octeto007);
 

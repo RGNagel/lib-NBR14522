@@ -23,7 +23,7 @@ TEST_CASE("class TaskScheduler") {
         // I think we can consider undefined behaviour if before adding some
         // delay the tasks will be trigger or not.
 
-        std::this_thread::sleep_for(1ms);
+        std::this_thread::sleep_for(5ms);
 
         CHECK(t1 == 1);
         CHECK(t2 == 1);
@@ -44,21 +44,24 @@ TEST_CASE("class TaskScheduler") {
         CHECK(t3 == 0);
 
         std::this_thread::sleep_for(50ms);
-        std::this_thread::sleep_for(5ms); // add extra delay to assure process has enough time to execute it
+        std::this_thread::sleep_for(5ms); // add extra delay to assure process
+                                          // has enough time to execute it
 
         CHECK(t1 == 1);
         CHECK(t2 == 0);
         CHECK(t3 == 0);
 
         std::this_thread::sleep_for(50ms);
-        std::this_thread::sleep_for(5ms); // add extra delay to assure process has enough time to execute it
+        std::this_thread::sleep_for(5ms); // add extra delay to assure process
+                                          // has enough time to execute it
 
         CHECK(t1 == 1);
         CHECK(t2 == 1);
         CHECK(t3 == 0);
 
         std::this_thread::sleep_for(50ms);
-        std::this_thread::sleep_for(5ms); // add extra delay to assure process has enough time to execute it
+        std::this_thread::sleep_for(5ms); // add extra delay to assure process
+                                          // has enough time to execute it
 
         CHECK(t1 == 1);
         CHECK(t2 == 1);

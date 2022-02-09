@@ -59,7 +59,7 @@ class TaskScheduler {
                 }
             }
         }
-        
+
         _stop = false;
     }
 
