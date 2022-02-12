@@ -13,4 +13,9 @@ TEST_CASE("Timer") {
     CHECK(!t.timedOut());
     std::this_thread::sleep_for(10ms);
     CHECK(t.timedOut());
+
+    t.setTimeout(20ms);
+    CHECK(!t.timedOut());
+    std::this_thread::sleep_for(20ms);
+    CHECK(t.timedOut());
 }
