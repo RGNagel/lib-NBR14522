@@ -11,6 +11,7 @@ class Leitor {
   public:
     typedef enum {
         RESPOSTA_RECEBIDA,
+        RESPOSTA_BYTE_RECEBIDO,
         RESPOSTA_PEDACO_RECEBIDO,
         DESCONECTADO,
         SINCRONIZADO,
@@ -35,6 +36,7 @@ class Leitor {
     size_t _respostaIndex;
     size_t _countTransmittedNAK;
     size_t _countReceivedNAK;
+    bool _respostaTimedOut = false;
 
     void _setEstado(estado_t estado) {
         _estado = estado;
@@ -47,14 +49,15 @@ class Leitor {
             _countTransmittedNAK = 0;
             _transmiteComando(_comando);
             break;
+        case RESPOSTA_BYTE_RECEBIDO:
         case RESPOSTA_PEDACO_RECEBIDO:
-            _tasks.addTask(std::bind(&Leitor::_readPieceOfResposta, this),
+            _tasks.addTask(std::bind(&Leitor::_readNextPieceOfResposta, this),
                            std::chrono::milliseconds(TMAXCAR_MSEC));
             break;
         case RESPOSTA_RECEBIDA:
             _callbackDeResposta(_resposta);
 
-            if (!isComposedCodeCommand(_resposta.at(0))) {
+            if (isComposedCodeCommand(_resposta.at(0))) {
                 // os unicos 3 comandos compostos existentes na norma (0x26,
                 // 0x27 e 0x52) possuem o octeto 006 (5o byte), cujo valor:
                 // 0N -> resposta/bloco intermediário
@@ -74,11 +77,12 @@ class Leitor {
             }
             break;
         case ESPERANDO_RESPOSTA:
-            // TODO: é possivel otimizar esse trecho, colocando TMAXRSP somente
-            // como timeout e um loop/task periodico de tempo menor p/ checar se
-            // recebeu a resposta.
-            _respostaIndex = 0;
-            _tasks.addTask(std::bind(&Leitor::_readPieceOfResposta, this),
+            _tasks.addTask(std::bind(&Leitor::_waitingResposta, this));
+
+            _respostaTimedOut = false;
+            // no data within TMAXRSP or TMAXCAR? then response from meter has
+            // timed out
+            _tasks.addTask(std::bind(&Leitor::_waitingRespostaTimedOut, this),
                            std::chrono::milliseconds(TMAXRSP_MSEC));
             break;
         case NAK_TX_EXCEDIDO:
@@ -121,15 +125,76 @@ class Leitor {
         }
     }
 
-    void _readPieceOfResposta() {
-        size_t read =
-            _porta->read(&_resposta[_respostaIndex], _resposta.size());
-
-        printf("from medidor: ");
-        for (size_t i = 0; i < read; i++) {
-            printf("%x ", _resposta[i]);
+    void _waitingRespostaTimedOut() {
+        if (_getEstado() == ESPERANDO_RESPOSTA) {
+            _respostaTimedOut = true;
         }
-        printf("\n");
+    }
+
+    void _waitingResposta() {
+
+        if (_respostaTimedOut) {
+            _setEstado(TEMPO_EXCEDIDO);
+            return;
+        }
+
+        byte_t firstByte;
+        size_t read = _porta->read(&firstByte, 1);
+
+        if (read <= 0) {
+            _tasks.addTask(std::bind(&Leitor::_waitingResposta, this), 10ms);
+            return;
+        }
+
+        // recebeu byte do medidor...
+
+        // TODO: cancel timed out task! Must be implemented in TaskScheduler
+        // class.
+
+        // check if NAK received
+        if (firstByte == NAK) {
+            _countReceivedNAK++;
+            // devemos enviar novamente o comando ao medidor, caso menos de
+            // 7 NAKs recebidos
+            if (_countReceivedNAK >= MAX_BLOCO_NAK) {
+                _setEstado(NAK_RX_EXCEDIDO);
+            } else {
+                // retransmite comando
+                _transmiteComando(_comando);
+            }
+
+            return;
+        }
+
+        // check if ENQ received
+        if (firstByte == ENQ) {
+            _setEstado(RESPOSTA_CODIGO_INVALIDO_ENQ);
+            return;
+        }
+
+        // check if codigo invalido
+        if (!isValidCodeCommand(firstByte)) {
+            printf("codigo invalido: %x\n", firstByte);
+            _setEstado(RESPOSTA_CODIGO_INVALIDO);
+            return;
+        }
+
+        // check if codigo diferente do enviado
+        if (firstByte != _comando.at(0)) {
+            _setEstado(RESPOSTA_CODIGO_DIFERE);
+            return;
+        }
+
+        // primeiro byte recebido OK!
+
+        _resposta.at(0) = firstByte;
+        _respostaIndex = 1;
+        _setEstado(RESPOSTA_BYTE_RECEBIDO);
+    }
+
+    void _readNextPieceOfResposta() {
+        size_t read = _porta->read(&_resposta[_respostaIndex],
+                                   _resposta.size() - _respostaIndex);
 
         // no data within TMAXRSP or TMAXCAR?
         if (read <= 0) {
@@ -137,47 +202,6 @@ class Leitor {
             _setEstado(TEMPO_EXCEDIDO);
             return;
         }
-
-        // primeiro pedaco recebido?
-        if (_respostaIndex == 0) {
-            // faz checagens de erros
-
-            // check if NAK received
-            if (_resposta.at(0) == NAK) {
-                _countReceivedNAK++;
-                // devemos enviar novamente o comando ao medidor, caso menos de
-                // 7 NAKs recebidos
-                if (_countReceivedNAK >= MAX_BLOCO_NAK) {
-                    _setEstado(NAK_RX_EXCEDIDO);
-                } else {
-                    // retransmite comando
-                    _transmiteComando(_comando);
-                }
-
-                return;
-            }
-
-            // check if ENQ received
-            if (_resposta.at(0) == ENQ) {
-                _setEstado(RESPOSTA_CODIGO_INVALIDO_ENQ);
-                return;
-            }
-
-            // check if codigo invalido
-            if (!isValidCodeCommand(_resposta.at(0))) {
-                printf("codigo invalido: %x\n", _resposta.at(0));
-                _setEstado(RESPOSTA_CODIGO_INVALIDO);
-                return;
-            }
-
-            // check if codigo diferente do enviado
-            if (_resposta.at(0) != _comando.at(0)) {
-                _setEstado(RESPOSTA_CODIGO_DIFERE);
-                return;
-            }
-        }
-
-        // pedaço recebido OK
 
         _respostaIndex += read;
 
@@ -187,7 +211,7 @@ class Leitor {
             return;
         }
 
-        // resposta completa recebido. Trata-a.
+        // resposta completa recebida. Trata-a.
 
         uint16_t crcReceived = getCRC(_resposta);
         uint16_t crcCalculated = CRC16(_resposta.data(), _resposta.size() - 2);
