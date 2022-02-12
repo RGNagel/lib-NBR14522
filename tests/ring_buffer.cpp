@@ -1,5 +1,6 @@
 #include "doctest/doctest.h"
 
+#include <NBR14522.h>
 #include <ring_buffer.h>
 
 TEST_CASE("Ring Buffer") {
