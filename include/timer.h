@@ -9,6 +9,8 @@ template <typename clock_type = std::chrono::system_clock> class Timer {
     moment timeoutAt;
 
   public:
+    Timer() {}
+    Timer(std::chrono::milliseconds duration) { setTimeout(duration); };
     void setTimeout(std::chrono::milliseconds duration) {
         timeoutAt = clock_type::now() + duration;
     }
