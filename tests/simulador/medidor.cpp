@@ -10,6 +10,7 @@
 #include <string.h>
 #include <task_scheduler.h>
 #include <thread>
+#include <timer.h>
 
 using namespace NBR14522;
 
@@ -19,7 +20,6 @@ TEST_CASE("Medidor Simulado") {
     Simulador::Medidor medidor(serie);
 
     std::thread t1(&Simulador::Medidor::run, &medidor);
-
     std::this_thread::sleep_for(5ms);
 
     std::array<byte_t, 258> data;
@@ -28,54 +28,92 @@ TEST_CASE("Medidor Simulado") {
     comando_t cmd;
     resposta_t rsp;
 
+    Timer<> timer;
+
     cmd.fill(0x00);
 
-    // read all ENQs and empty medidor read buffer
-    size_t read = medidor.read(data.data(), data.size());
-    for (size_t i = 0; i < read; i++)
-        CHECK(data.at(i) == ENQ);
+    // wait for next ENQ and then send cmd
+    byte_t enq = 0;
+    timer.setTimeout(std::chrono::milliseconds(TMAXENQ_MSEC));
+    while (!timer.timedOut()) {
+        if (medidor.read(&enq, 1)) {
+            REQUIRE(enq == ENQ);
+            break;
+        }
+    }
+    REQUIRE(!timer.timedOut());
+
+    SUBCASE("Single NAK") {
+        cmd.at(0) = 0x14;
+        setCRC(cmd, 0xDEAD); // wrong CRC
+        medidor.write(cmd.data(), cmd.size());
+
+        timer.setTimeout(std::chrono::milliseconds(TMAXRSP_MSEC));
+        while (!timer.timedOut()) {
+            byte_t nak = 0;
+            if (medidor.read(&nak, 1) == 1) {
+                CHECK(nak == NAK);
+                break;
+            }
+        }
+        CHECK(!timer.timedOut());
+    }
 
     SUBCASE("force all NAKs") {
         cmd.at(0) = 0x14;
-        setCRC(cmd, 0xDEAD);
-
-        // wait for next ENQ and then send cmd
-        byte_t enq = 0;
-        medidor.read(&enq, 1);
-        while (enq != ENQ) {
-            std::this_thread::sleep_for(5ms);
-            medidor.read(&enq, 1);
-        }
+        setCRC(cmd, 0xDEAD); // wrong CRC
 
         for (auto i = 0; i < MAX_BLOCO_NAK; i++) {
             medidor.write(cmd.data(), cmd.size());
-            std::this_thread::sleep_for(std::chrono::milliseconds(TMAXRSP_MSEC));
-            byte_t nak = 0;
-            CHECK(medidor.read(&nak, 1) == 1);
-            CHECK(nak == NAK);
+
+            timer.setTimeout(std::chrono::milliseconds(TMAXRSP_MSEC));
+
+            while (!timer.timedOut()) {
+                byte_t nak = 0;
+                if (medidor.read(&nak, 1) == 1) {
+                    CHECK(nak == NAK);
+                    break;
+                }
+            }
+            CHECK(!timer.timedOut());
+            // TODO sem esse delay TMINREV esse teste nao passa. Provavelemnte
+            // pq o medidor tá trabalhando com os valores máximos de timeout
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(TMINREV_MSEC));
+        }
+
+        // nada para ler
+        enq = 0;
+        CHECK(medidor.read(&enq, 1) == 0);
+
+        // aguarda ENQ
+        while (enq != ENQ) {
+            medidor.read(&enq, 1);
         }
     }
-    
+
     SUBCASE("0x14 valido") {
         cmd.at(0) = 0x14;
         setCRC(cmd, CRC16(cmd.data(), cmd.size() - 2));
 
-        // wait for next ENQ and then send cmd
-        byte_t enq = 0;
-        medidor.read(&enq, 1);
-        while (enq != ENQ) {
-            std::this_thread::sleep_for(5ms);
-            medidor.read(&enq, 1);
-        }
-
         medidor.write(cmd.data(), cmd.size());
 
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(TMAXRSP_MSEC / 2));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(TMAXRSP_MSEC));
+        timer.setTimeout(std::chrono::milliseconds(TMAXRSP_MSEC));
+
+        size_t totalRead = 0;
+        while (!timer.timedOut()) {
+            size_t read = medidor.read(&rsp.at(totalRead), rsp.size());
+            totalRead += read;
+            if (totalRead >= rsp.size())
+                break;
+        }
+        CHECK(!timer.timedOut());
 
         // read resposta
-        read = medidor.read(rsp.data(), rsp.size());
-        CHECK(read == rsp.size());
+        // size_t read = medidor.read(rsp.data(), rsp.size());
+        // CHECK(read == rsp.size());
+
         CHECK(rsp.at(0) == 0x14);
         CHECK(rsp.at(1) == serie.at(0));
         CHECK(rsp.at(2) == serie.at(1));
@@ -88,22 +126,13 @@ TEST_CASE("Medidor Simulado") {
         cmd.at(0) = 0x52;
         setCRC(cmd, CRC16(cmd.data(), cmd.size() - 2));
 
-        // wait for next ENQ and then send cmd
-
-        byte_t enq = 0;
-        medidor.read(&enq, 1);
-        while (enq != ENQ) {
-            std::this_thread::sleep_for(5ms);
-            medidor.read(&enq, 1);
-        }
-
         medidor.write(cmd.data(), cmd.size());
 
         std::this_thread::sleep_for(
             std::chrono::milliseconds(TMAXRSP_MSEC / 2));
 
         // read resposta
-        read = medidor.read(rsp.data(), rsp.size());
+        size_t read = medidor.read(rsp.data(), rsp.size());
         CHECK(read == rsp.size());
 
         while (read == rsp.size()) {
