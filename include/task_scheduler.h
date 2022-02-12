@@ -34,8 +34,10 @@ class TaskScheduler {
 
     void addTask(std::function<void()> callback,
                  std::chrono::milliseconds waitAtLeast = 0ms) {
-        std::chrono::time_point triggerAt =
-            std::chrono::high_resolution_clock::now() + waitAtLeast;
+        // std::chrono::time_point triggerAt =
+        //     std::chrono::high_resolution_clock::now() + waitAtLeast;
+
+        time_point triggerAt = clock_type::now() + waitAtLeast;
 
         for (auto t = _tasks.begin(); t != _tasks.end(); t++) {
             if (!t->fun) {
