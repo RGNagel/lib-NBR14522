@@ -34,3 +34,8 @@
 
 # Build directory
 build/
+build-raspberry/
+
+
+# vscode
+.vscode/
