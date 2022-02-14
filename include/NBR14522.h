@@ -63,6 +63,10 @@ inline bool isComposedCodeCommand(byte_t code) {
         return false;
 }
 
+inline bool isLastRespostaOfComposed(const resposta_t& rsp) {
+    return rsp.at(5) & 0x10;
+}
+
 enum Sinalizador { ENQ = 0x05, ACK = 0x06, NAK = 0x15, WAIT = 0x10 };
 
 constexpr uint32_t BAUDRATE = 9600;

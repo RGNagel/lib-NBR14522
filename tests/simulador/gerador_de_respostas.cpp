@@ -6,11 +6,7 @@
 
 using namespace NBR14522;
 
-void _CHECK_CRC(resposta_t& resposta) {
-    uint16_t crcRes = getCRC(resposta);
-    uint16_t crcCalc = CRC16(resposta.data(), resposta.size() - 2);
-    CHECK(crcRes == crcCalc);
-}
+void _CHECK_CRC(resposta_t& resposta);
 
 TEST_CASE("Gerador") {
     GeradorDeRespostas gerador;
@@ -52,4 +48,10 @@ TEST_CASE("Gerador") {
                 CHECK((octeto006 & 0xF0) == 0x00);
         }
     }
+}
+
+void _CHECK_CRC(resposta_t& resposta) {
+    uint16_t crcRes = getCRC(resposta);
+    uint16_t crcCalc = CRC16(resposta.data(), resposta.size() - 2);
+    CHECK(crcRes == crcCalc);
 }

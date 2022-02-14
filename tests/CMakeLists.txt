@@ -11,6 +11,7 @@ set(TESTFILES        # All .cpp files in tests/
     simulador/gerador_de_respostas.cpp
     task_scheduler.cpp
     BCD.cpp
+    timer.cpp
 )
 
 set(TEST_MAIN unit_tests)   # Default name for test executable (change if you wish).

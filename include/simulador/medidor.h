@@ -1,15 +1,19 @@
 #pragma once
 
-#include <NBR14522.h>
-#include <iporta.h>
-#include <ring_buffer.h>
-#include <task_scheduler.h>
-
 #include "gerador_de_respostas.h"
-
-using namespace NBR14522;
+#include <NBR14522.h>
+#include <chrono>
+#include <iporta.h>
+#include <log_policy.h>
+#include <ring_buffer.h>
+#include <timer.h>
 
 namespace Simulador {
+
+using namespace NBR14522;
+using ms = std::chrono::milliseconds;
+using namespace std::literals;
+using SysTimer = Timer<std::chrono::system_clock>;
 
 /**
  *
@@ -19,213 +23,18 @@ namespace Simulador {
  * possa ser usada como uma porta serial do ponto de vista do leitor.
  *
  */
-class Medidor : public IPorta {
+template <class LogPolicy = LogPolicyStdout> class Medidor : public IPorta {
   private:
     RingBuffer<byte_t, 1024> _rb_received;
     RingBuffer<byte_t, 1024> _rb_transmitted;
 
-    uint8_t _nak_transmitted = 0;
-    uint8_t _nak_received = 0;
-
-    // comando vindo do leitor
-    comando_t _comando;
-    size_t _comandoIndex = 0;
-
-    // variaveis relacionadas a(s) resposta(s) dadas pelo medidor
     GeradorDeRespostas _gerador;
-    uint16_t _quantidadeDeRespostas;
-    resposta_t _nextResposta;
 
-    TaskScheduler<> _tasks;
-
-    enum {
-        CONECTADO,
-        COMANDO_RECEBIDO,
-        NAK_ENVIADO,
-        RESPOSTA_ENVIADA
-    } _state = CONECTADO;
+    bool _stop = false;
 
     void _flush(RingBuffer<byte_t, 1024>& rb) {
         while (rb.toread() >= 1)
             rb.read();
-    }
-
-    void _comandoRecebido() {
-
-        uint16_t crcReceived = NBR14522::getCRC(_comando);
-        uint16_t crcCalculated = CRC16(_comando.data(), _comando.size() - 2);
-
-        if (crcReceived != crcCalculated) {
-            // se CRC com erro, o medidor deve enviar um NAK para o
-            // leitor e aguardar novo COMANDO. O máximo de NAKs enviados
-            // para um mesmo comando é 7.
-
-            if (_nak_transmitted >= MAX_BLOCO_NAK) {
-                // quebra de sequencia o medidor envia o ENQ
-                _nak_transmitted = 0;
-                // TODO (MAYBE): calcular valor do próximo ENQ levando em
-                // consideração o tempo de leitura do comando
-                _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                               std::chrono::milliseconds(TMINENQ_MSEC));
-            } else {
-                _rb_transmitted.write(NBR14522::NAK);
-                _nak_transmitted++;
-                _state = NAK_ENVIADO;
-                _tasks.addTask(
-                    std::bind(&Simulador::Medidor::timedOutTMAXRSP, this),
-                    std::chrono::milliseconds(TMAXRSP_MSEC));
-            }
-        }
-        // verifica se o comando recebido existe e/ou é valido
-        else if (!NBR14522::isValidCodeCommand(_comando.at(0))) {
-            // a norma não define qual deve ser o comportamento do
-            // medidor após receber um comando inválido mas com CRC OK.
-            // vamos quebrar a sessão.
-
-            // TODO (MAYBE): calcular valor do próximo ENQ levando em
-            // consideração o tempo de leitura do comando
-            _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                           std::chrono::milliseconds(TMINENQ_MSEC));
-        }
-        // comando recebido OK
-        else {
-            // TODO ...
-            _quantidadeDeRespostas = _gerador.gerar(_comando);
-
-            _gerador.getNextResposta(_nextResposta);
-            _sendResposta(_nextResposta);
-            _quantidadeDeRespostas--;
-        }
-    }
-
-    void _sendResposta(const resposta_t& resposta) {
-        // garante que nenhum lixo esteja presente se nao pode ser confundido
-        // com o ACK/NAK esperado
-        _flush(_rb_received);
-
-        _nak_received = 0;
-
-        for (size_t i = 0; i < resposta.size(); i++)
-            _rb_transmitted.write(resposta.at(i));
-
-        _tasks.addTask(std::bind(&Simulador::Medidor::timedOutTMAXRSP, this),
-                       std::chrono::milliseconds(TMAXRSP_MSEC));
-        _state = RESPOSTA_ENVIADA;
-    }
-
-    void _readNextPieceOfComando() {
-        if (_rb_received.toread() <= 0) {
-            // TODO (MAYBE): calcular valor do próximo ENQ levando em
-            // consideração o tempo das leituras dos bytes anteriores
-            _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                           std::chrono::milliseconds(TMINENQ_MSEC));
-            return;
-        }
-
-        _readPieceOfComando();
-    }
-
-    void _readPieceOfComando() {
-        while (_rb_received.toread() && _comandoIndex < COMANDO_SZ)
-            _comando.at(_comandoIndex++) = _rb_received.read();
-
-        if (_comandoIndex == COMANDO_SZ) {
-            _comandoIndex = 0;
-            _comandoRecebido();
-        } else {
-            _tasks.addTask(
-                std::bind(&Simulador::Medidor::_readNextPieceOfComando, this),
-                std::chrono::milliseconds(TMAXCAR_MSEC));
-        }
-    }
-
-    void timedOutTMAXSINC() {
-        if (_rb_received.toread() <= 0) {
-            _tasks.addTask(
-                std::bind(&Simulador::Medidor::_ENQ, this),
-                std::chrono::milliseconds(TMINENQ_MSEC - TMAXSINC_MSEC));
-            return;
-        }
-
-        // has rxed at least one byte
-
-        _comandoIndex = 0;
-        _readPieceOfComando();
-    }
-
-    void timedOutTMAXRSP() {
-        switch (_state) {
-        case NAK_ENVIADO:
-            if (_rb_received.toread() <= 0) {
-                // TODO (MAYBE): calculate next ENQ regarding the last bytes
-                // txed
-                _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                               std::chrono::milliseconds(TMINENQ_MSEC));
-            } else {
-                _comandoIndex = 0;
-                _readPieceOfComando();
-            }
-            break;
-        case RESPOSTA_ENVIADA:
-            if (_rb_received.toread() <= 0) {
-                // NBR14522: "se após o tempo permitido para a leitora enviar o
-                // ACK este ainda não foi enviado, o medidor deve enviar ENQ
-                // aguardando o recebimento do ACK"
-
-                _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this));
-                return;
-            }
-
-            switch (_rb_received.read()) {
-            case ACK:
-                if (_quantidadeDeRespostas <= 0) {
-                    // todas respostas enviadas
-                    _state = CONECTADO;
-                    _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this));
-                    return;
-                }
-
-                _gerador.getNextResposta(_nextResposta);
-                _sendResposta(_nextResposta);
-                _quantidadeDeRespostas--;
-
-                break;
-            case NAK:
-                _nak_received++;
-
-                if (_nak_received >= MAX_BLOCO_NAK) {
-                    _state = CONECTADO;
-                    _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this));
-                    return;
-                }
-
-                _sendResposta(_nextResposta);
-
-                break;
-            default:
-                _state = CONECTADO;
-                _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this));
-
-                break;
-            }
-            break;
-        default:
-            break;
-        }
-    }
-
-    void _ENQ() {
-        // discard all bytes received so far
-        _flush(_rb_received);
-
-        // send ENQ
-        _rb_transmitted.write(NBR14522::ENQ);
-
-        // de acordo com a norma, deveriamos receber o PRIMEIRO byte de
-        // dado após no máximo ~TMAXSINC_MSEC depois de enviar o
-        // ENQ.
-        _tasks.addTask(std::bind(&Simulador::Medidor::timedOutTMAXSINC, this),
-                       std::chrono::milliseconds(TMAXSINC_MSEC));
     }
 
   protected:
@@ -252,13 +61,219 @@ class Medidor : public IPorta {
 
   public:
     Medidor(NBR14522::medidor_num_serie_t medidor = {1, 2, 3, 4})
-        : _gerador(medidor), _tasks() {
-        _tasks.addTask(std::bind(&Simulador::Medidor::_ENQ, this),
-                       std::chrono::milliseconds(TMINENQ_MSEC));
+        : _gerador(medidor) {}
+
+    void run() {
+        LogPolicy::log("Iniciando execução...\n");
+
+        // ----------------------------
+        // Envia ENQ e aguarda comando
+        // ----------------------------
+
+    proximoENQ:
+
+        // esvazia dados recebidos e transmitidos até agora
+        _flush(_rb_received);
+        _flush(_rb_transmitted);
+
+        // envia ENQ e agenda próximo ENQ
+        LogPolicy::log("Enviando ENQ\n");
+        _rb_transmitted.write(NBR14522::ENQ);
+        SysTimer timerSendNextENQ;
+        timerSendNextENQ.setTimeout(ms(TMINENQ_MSEC));
+
+        // de acordo com a norma, deveriamos receber o PRIMEIRO byte de
+        // dado após no máximo ~TMAXSINC_MSEC depois de enviar o
+        // ENQ.
+        SysTimer timerShouldRecvDataWithin;
+        timerShouldRecvDataWithin.setTimeout(ms(TMAXSINC_MSEC));
+
+        while (1) {
+            // guard
+            if (_stop) {
+                _stop = false;
+                return;
+            }
+
+            if (timerSendNextENQ.timedOut()) {
+                // envia ENQ e agenda próximo ENQ
+                LogPolicy::log("Enviando ENQ\n");
+                _rb_transmitted.write(NBR14522::ENQ);
+                timerSendNextENQ.setTimeout(ms(TMINENQ_MSEC));
+                timerShouldRecvDataWithin.setTimeout(ms(TMAXSINC_MSEC));
+            }
+
+            if (_rb_received.toread() &&
+                !timerShouldRecvDataWithin.timedOut()) {
+                LogPolicy::log("Recebeu dado(s) dentro do período\n");
+                break;
+            } else if (_rb_received.toread() &&
+                       timerShouldRecvDataWithin.timedOut()) {
+                LogPolicy::log(
+                    "Recebeu dado(s) FORA do período. Descarta dado(s)\n");
+                _flush(_rb_received);
+            }
+        }
+
+        // ------------------------------------------------------------
+        // recebeu o(s) dado(s) dentro do tempo estabelecido pela norma.
+        // ------------------------------------------------------------
+
+        size_t countSentNAK = 0;
+
+    lerComando:
+
+        comando_t comando;
+        size_t comandoIndex = 0;
+
+        while (_rb_received.toread() && comandoIndex < comando.size())
+            comando.at(comandoIndex++) = _rb_received.read();
+
+        SysTimer timerShouldRecvNextPieceWithin;
+        timerShouldRecvNextPieceWithin.setTimeout(ms(TMAXCAR_MSEC));
+
+        while (comandoIndex < comando.size()) {
+            if (timerShouldRecvNextPieceWithin.timedOut()) {
+                LogPolicy::log("Tempo excedido ao receber comando completo\n");
+                SysTimer::wait(250ms);
+                goto proximoENQ;
+            }
+
+            while (_rb_received.toread())
+                comando.at(comandoIndex++) = _rb_received.read();
+        }
+
+        LogPolicy::log("Comando completo recebido\n");
+
+        uint16_t crcRecv = NBR14522::getCRC(comando);
+        uint16_t crcCalc = CRC16(comando.data(), comando.size() - 2);
+
+        if (crcRecv != crcCalc) {
+            // se CRC com erro, o medidor deve enviar um NAK para o
+            // leitor e aguardar novo COMANDO. O máximo de NAKs enviados
+            // para um mesmo comando é 7.
+
+            LogPolicy::log("Comando com erro de CRC.\n");
+
+            if (countSentNAK >= MAX_BLOCO_NAK) {
+                LogPolicy::log("Envio de NAKs excedido\n");
+                // quebra de sequencia o medidor envia o ENQ
+                // TODO (MAYBE): calcular valor do próximo ENQ levando em
+                // consideração o tempo de leitura do comando
+
+                SysTimer::wait(250ms);
+                goto proximoENQ;
+            }
+
+            LogPolicy::log("Enviando NAK\n");
+            _rb_transmitted.write(NAK);
+            countSentNAK++;
+            goto lerComando;
+
+        } else if (!isValidCodeCommand(comando.at(0))) {
+            // a norma não define qual deve ser o comportamento do
+            // medidor após receber um comando inválido mas com CRC OK.
+            // vamos quebrar a sessão.
+
+            LogPolicy::log("Comando recebido inválido\n");
+
+            // TODO: subst. esses waits por uma logica que aguarda todo "lixo"
+            // do leitor vir e então só após disso vai para o ENQ
+            SysTimer::wait(250ms);
+            goto proximoENQ;
+        }
+
+        // ------------------------------------
+        // Comando recebido OK. Gera respostas.
+        // -----------------------------------
+
+        LogPolicy::log("Comando recebido OK. Gera resposta(s).\n");
+
+        size_t quantidadeDeRespostas = _gerador.gerar(comando);
+
+        LogPolicy::log("Quant. de respostas geradas: " +
+                       std::to_string(quantidadeDeRespostas) + "\n");
+
+        for (size_t r = 0; r < quantidadeDeRespostas; r++) {
+            resposta_t resposta;
+            _gerador.getNextResposta(resposta);
+
+            // envia resposta
+            for (size_t i = 0; i < resposta.size(); i++)
+                _rb_transmitted.write(resposta.at(i));
+
+            LogPolicy::log("Enviando resposta[" + std::to_string(r) +
+                           "]. Aguarda ACK.\n");
+
+            // resposta enviada, aguarda ACK
+            SysTimer timerAguardaACK;
+            timerAguardaACK.setTimeout(ms(TMAXRSP_MSEC));
+            size_t timedOutAguardaACK = 0;
+            size_t countRecvNAK = 0;
+
+            while (1) {
+                if (timerAguardaACK.timedOut()) {
+                    // NBR14522: "se após o tempo permitido para a leitora
+                    // enviar o ACK este ainda não foi enviado, o medidor deve
+                    // enviar ENQ aguardando o recebimento do ACK"
+
+                    // TODO: Mas quantas vezes até dar timeout?
+                    timedOutAguardaACK++;
+                    if (timedOutAguardaACK >= MAX_BLOCO_NAK) {
+                        LogPolicy::log(
+                            "Tempo total para receber ACK expirou.\n");
+                        goto proximoENQ;
+                    }
+
+                    LogPolicy::log("Enviando ENQ. Aguarda ACK novamente\n");
+
+                    _rb_transmitted.write(ENQ);
+                    timerAguardaACK.setTimeout(ms(TMINENQ_MSEC));
+                }
+
+                if (!_rb_received.toread())
+                    continue;
+
+                byte_t dado = _rb_received.read();
+
+                if (dado == ACK) {
+                    LogPolicy::log("ACK recebido\n");
+                    break;
+                }
+
+                if (dado == NAK) {
+                    LogPolicy::log("NAK recebido\n");
+
+                    countRecvNAK++;
+                    if (countRecvNAK >= MAX_BLOCO_NAK) {
+                        SysTimer::wait(ms(TMINREV_MSEC)); // TODO Precisa mesmo?
+                        LogPolicy::log("Reenvios excedidos\n");
+                        goto proximoENQ;
+                    }
+
+                    LogPolicy::log("Reenviando resposta\n");
+
+                    for (size_t i = 0; i < resposta.size(); i++)
+                        _rb_transmitted.write(resposta.at(i));
+
+                    timerAguardaACK.setTimeout(ms(TMAXRSP_MSEC));
+                } else {
+                    LogPolicy::log("Sinalizador inválido recebido\n");
+
+                    SysTimer::wait(250ms);
+                    goto proximoENQ;
+                }
+            }
+        }
+
+        LogPolicy::log("Respostas(s) enviadas com sucesso\n");
+        goto proximoENQ;
     }
 
-    void run() { _tasks.run(); }
-    void runStop() { _tasks.runStop(); }
+    void runStop() {
+        LogPolicy::log("Parando execução...\n");
+        _stop = true;
+    }
 };
 
 } // namespace Simulador

@@ -10,10 +10,16 @@ template <typename clock_type = std::chrono::system_clock> class Timer {
 
   public:
     Timer() {}
-    Timer(std::chrono::milliseconds duration) { setTimeout(duration); };
+    Timer(std::chrono::milliseconds duration) { setTimeout(duration); }
     void setTimeout(std::chrono::milliseconds duration) {
         timeoutAt = clock_type::now() + duration;
     }
 
     bool timedOut() { return clock_type::now() >= timeoutAt; }
+
+    static void wait(std::chrono::milliseconds duration) {
+        Timer<clock_type> timer(duration);
+        while (!timer.timedOut())
+            ;
+    }
 };

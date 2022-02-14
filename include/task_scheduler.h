@@ -5,10 +5,8 @@
 #include <map>
 #include <thread>
 
-using namespace std::literals;
-
 /**
- * @brief
+ * @brief Agendador de tarefas (callbacks)
  *
  * @tparam clock_type    std::chrono clock. Para sistemas embarcados deve-se
  * criar um novo. Veja ref.:
@@ -32,8 +30,9 @@ class TaskScheduler {
   public:
     TaskScheduler() : _stop(false) { _tasks.fill({nullptr, {}}); }
 
-    void addTask(std::function<void()> callback,
-                 std::chrono::milliseconds waitAtLeast = 0ms) {
+    void addTask(
+        std::function<void()> callback,
+        std::chrono::milliseconds waitAtLeast = std::chrono::milliseconds(0)) {
         // std::chrono::time_point triggerAt =
         //     std::chrono::high_resolution_clock::now() + waitAtLeast;
 

@@ -22,9 +22,6 @@ class GeradorDeRespostas {
     // retorna numero de respostas geradas
     uint16_t gerar(NBR14522::comando_t& comando) {
 
-        if (!NBR14522::isValidCodeCommand(comando.at(0)))
-            return 0;
-
         _code = comando.at(0);
 
         _respostaIndex = 0;
