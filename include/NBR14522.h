@@ -17,6 +17,42 @@ typedef std::array<byte_t, RESPOSTA_SZ> resposta_t;
 typedef std::array<byte_t, 3> leitor_num_serie_t;
 typedef std::array<byte_t, 4> medidor_num_serie_t;
 
+typedef enum {
+    CANAIS_1_2_3 = 0,
+    CANAIS_4_5_6,
+    CANAIS_7_8_9,
+    CANAIS_10_11_12,
+    CANAIS_13_14_15,
+    CANAIS_16_17_18,
+    CANAIS_19_20_21,
+    CANAIS_22_23_24,
+    CANAIS_25_26_27,
+    CANAIS_28_29_30,
+    CANAIS_31_32_33,
+    CANAIS_34_35_36,
+    CANAIS_37_38_39,
+    CANAIS_40_41_42,
+    CANAIS_43_44_45,
+    CANAIS_46_47_48,
+    CANAIS_49_50_51,
+    CANAIS_52_53_54,
+    CANAIS_55_56_57,
+    CANAIS_58_59_60,
+    CANAIS_61_62_63,
+    CANAIS_64_65_66,
+    CANAIS_67_68_69,
+    CANAIS_70_71_72,
+    CANAIS_73_74_75,
+    CANAIS_76_77_78,
+    CANAIS_79_80_81,
+    CANAIS_82_83_84,
+    CANAIS_85_86_87,
+    CANAIS_88_89_90,
+    CANAIS_91_92_93,
+    CANAIS_94_95_96,
+    CANAIS_97_98_99 = 32
+} canal_t;
+
 template <size_t S> uint16_t getCRC(std::array<byte_t, S>& cmd_ou_rsp);
 inline medidor_num_serie_t getNumSerieMedidor(resposta_t& resposta);
 inline medidor_num_serie_t getNumSerieMedidor(resposta_t& resposta);
