@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <vector>
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -52,6 +53,97 @@ typedef enum {
     CANAIS_94_95_96,
     CANAIS_97_98_99 = 32
 } canal_t;
+
+typedef enum {
+    REPOSICAO_DE_DEMANDA,
+    VERIFICACAO,
+    RECUPERACAO,
+    REPOSICAO_DE_DEMANDA_RESUMIDA,
+    VERIFICACAO_RESUMIDA,
+    RECUPERACAO_RESUMIDA,
+    VERIFICACAO_DA_MEMORIA_DE_MASSA
+} leitura_padrao_t;
+
+/**
+ * Quais informações serão necessárias para uma leitura padrão?
+ * começam com os comandos 20, 21, 22, 51 que possuem os parâmetros:
+ * 1 - grupo de canais (00,01,02,03,04)
+ * 2 - quantidade (em tempo) da memoria de massa a ser lida
+ * 3 - tempo em horas ou dias
+ *
+ */
+
+// typedef struct {
+//     uint8_t tempo_mm;
+//     bool tempo_mm_unidade; // 0: horas, 1: dias
+//     uint8_t grupo_de_canais;
+// } parametros_t;
+
+inline void leituraPadrao(std::vector<comando_t>& comandos,
+                          const leitura_padrao_t tipo,
+                          const canal_t canal = CANAIS_1_2_3) {
+    switch (tipo) {
+    case REPOSICAO_DE_DEMANDA:
+        comandos.push_back({0x20, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({0x80});
+        comandos.push_back({0x24});
+        comandos.push_back({0x25});
+        comandos.push_back({0x28});
+        comandos.push_back({0x27});
+        break;
+    case VERIFICACAO:
+        comandos.push_back({21, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({80});
+        comandos.push_back({23});
+        comandos.push_back({25});
+        comandos.push_back({28});
+        comandos.push_back({26});
+        break;
+    case RECUPERACAO:
+        comandos.push_back({22, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({80});
+        comandos.push_back({24});
+        comandos.push_back({25});
+        comandos.push_back({28});
+        comandos.push_back({27});
+        break;
+    case REPOSICAO_DE_DEMANDA_RESUMIDA:
+        comandos.push_back({20, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({80});
+        comandos.push_back({24});
+        comandos.push_back({41});
+        comandos.push_back({42});
+        comandos.push_back({43});
+        comandos.push_back({25});
+        comandos.push_back({28});
+        break;
+    case VERIFICACAO_RESUMIDA:
+        comandos.push_back({21, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({80});
+        comandos.push_back({23});
+        comandos.push_back({44});
+        comandos.push_back({45});
+        comandos.push_back({46});
+        comandos.push_back({25});
+        comandos.push_back({28});
+        break;
+    case RECUPERACAO_RESUMIDA:
+        comandos.push_back({22, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({80});
+        comandos.push_back({24});
+        comandos.push_back({41});
+        comandos.push_back({42});
+        comandos.push_back({43});
+        comandos.push_back({25});
+        comandos.push_back({28});
+        break;
+    case VERIFICACAO_DA_MEMORIA_DE_MASSA:
+        comandos.push_back({51, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({80});
+        comandos.push_back({52});
+        break;
+    }
+}
 
 template <size_t S> uint16_t getCRC(std::array<byte_t, S>& cmd_ou_rsp);
 inline medidor_num_serie_t getNumSerieMedidor(resposta_t& resposta);
