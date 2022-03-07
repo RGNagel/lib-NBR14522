@@ -53,7 +53,7 @@ set(LIBRARY_NAME NBR14522)  # Default name for the library built from src/*.cpp 
 add_library(${LIBRARY_NAME} OBJECT ${SOURCES})
 
 # Lib needs its header files, and users of the library must also see these (PUBLIC). (No change needed)
-target_include_directories(${LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(${LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/include/porta_serial)
 
 # There's also (probably) doctests within the library, so we need to see this as well.
 target_link_libraries(${LIBRARY_NAME} PUBLIC doctest)
@@ -66,7 +66,7 @@ target_set_warnings(${LIBRARY_NAME} ENABLE ALL ALL DISABLE Annoying)
 # Add an executable for the file app/main.cpp.
 # If you add more executables, copy these lines accordingly.
 set(LEITOR leitor)
-add_executable(${LEITOR} app/leitor.cpp src/serialib.cpp)
+add_executable(${LEITOR} app/leitor.cpp src/porta_serial/serialib.cpp)
 target_link_libraries(${LEITOR} PRIVATE ${LIBRARY_NAME})
 target_set_warnings(${LEITOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
 target_enable_lto(${LEITOR} optimized)  # enable link-time-optimization if available for non-debug configurations
@@ -83,3 +83,4 @@ set_target_properties(
 
 # Set up tests (see tests/CMakeLists.txt).
 add_subdirectory(tests)
+
