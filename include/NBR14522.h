@@ -92,55 +92,55 @@ inline void leituraPadrao(std::vector<comando_t>& comandos,
         comandos.push_back({0x27});
         break;
     case VERIFICACAO:
-        comandos.push_back({21, 0, 0, 0, 0, static_cast<byte_t>(canal)});
-        comandos.push_back({80});
-        comandos.push_back({23});
-        comandos.push_back({25});
-        comandos.push_back({28});
-        comandos.push_back({26});
+        comandos.push_back({0x21, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({0x80});
+        comandos.push_back({0x23});
+        comandos.push_back({0x25});
+        comandos.push_back({0x28});
+        comandos.push_back({0x26});
         break;
     case RECUPERACAO:
-        comandos.push_back({22, 0, 0, 0, 0, static_cast<byte_t>(canal)});
-        comandos.push_back({80});
-        comandos.push_back({24});
-        comandos.push_back({25});
-        comandos.push_back({28});
-        comandos.push_back({27});
+        comandos.push_back({0x22, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({0x80});
+        comandos.push_back({0x24});
+        comandos.push_back({0x25});
+        comandos.push_back({0x28});
+        comandos.push_back({0x27});
         break;
     case REPOSICAO_DE_DEMANDA_RESUMIDA:
-        comandos.push_back({20, 0, 0, 0, 0, static_cast<byte_t>(canal)});
-        comandos.push_back({80});
-        comandos.push_back({24});
-        comandos.push_back({41});
-        comandos.push_back({42});
-        comandos.push_back({43});
-        comandos.push_back({25});
-        comandos.push_back({28});
+        comandos.push_back({0x20, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({0x80});
+        comandos.push_back({0x24});
+        comandos.push_back({0x41});
+        comandos.push_back({0x42});
+        comandos.push_back({0x43});
+        comandos.push_back({0x25});
+        comandos.push_back({0x28});
         break;
     case VERIFICACAO_RESUMIDA:
-        comandos.push_back({21, 0, 0, 0, 0, static_cast<byte_t>(canal)});
-        comandos.push_back({80});
-        comandos.push_back({23});
-        comandos.push_back({44});
-        comandos.push_back({45});
-        comandos.push_back({46});
-        comandos.push_back({25});
-        comandos.push_back({28});
+        comandos.push_back({0x21, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({0x80});
+        comandos.push_back({0x23});
+        comandos.push_back({0x44});
+        comandos.push_back({0x45});
+        comandos.push_back({0x46});
+        comandos.push_back({0x25});
+        comandos.push_back({0x28});
         break;
     case RECUPERACAO_RESUMIDA:
-        comandos.push_back({22, 0, 0, 0, 0, static_cast<byte_t>(canal)});
-        comandos.push_back({80});
-        comandos.push_back({24});
-        comandos.push_back({41});
-        comandos.push_back({42});
-        comandos.push_back({43});
-        comandos.push_back({25});
-        comandos.push_back({28});
+        comandos.push_back({0x22, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({0x80});
+        comandos.push_back({0x24});
+        comandos.push_back({0x41});
+        comandos.push_back({0x42});
+        comandos.push_back({0x43});
+        comandos.push_back({0x25});
+        comandos.push_back({0x28});
         break;
     case VERIFICACAO_DA_MEMORIA_DE_MASSA:
-        comandos.push_back({51, 0, 0, 0, 0, static_cast<byte_t>(canal)});
-        comandos.push_back({80});
-        comandos.push_back({52});
+        comandos.push_back({0x51, 0, 0, 0, 0, static_cast<byte_t>(canal)});
+        comandos.push_back({0x80});
+        comandos.push_back({0x52});
         break;
     }
 }

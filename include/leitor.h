@@ -1,5 +1,6 @@
 #pragma once
 
+#include <CRC.h>
 #include <NBR14522.h>
 #include <log_policy.h>
 #include <task_scheduler.h>
@@ -79,6 +80,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
         // devemos receber o primeiro byte da resposta em até TMAXRSP
         timer.setTimeout(ms(TMAXRSP_MSEC));
         while (!timer.timedOut() && !txTimer.timedOut()) {
+
             byte_t firstByte = 0;
             if (_porta->read(&firstByte, 1) == 1) {
                 if (firstByte == NAK) {

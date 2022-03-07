@@ -65,14 +65,16 @@ target_set_warnings(${LIBRARY_NAME} ENABLE ALL ALL DISABLE Annoying)
 
 # Add an executable for the file app/main.cpp.
 # If you add more executables, copy these lines accordingly.
-add_executable(main app/main.cpp)   # Name of exec. and location of file.
-target_link_libraries(main PRIVATE ${LIBRARY_NAME})  # Link the executable to library (if it uses it).
-target_set_warnings(main ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
-target_enable_lto(main optimized)  # enable link-time-optimization if available for non-debug configurations
+set(LEITOR leitor)
+add_executable(${LEITOR} app/leitor.cpp src/serialib.cpp)
+target_link_libraries(${LEITOR} PRIVATE ${LIBRARY_NAME})
+target_set_warnings(${LEITOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
+target_enable_lto(${LEITOR} optimized)  # enable link-time-optimization if available for non-debug configurations
+
 
 # Set the properties you require, e.g. what C++ standard to use. Here applied to library and main (change as needed).
 set_target_properties(
-    ${LIBRARY_NAME} main
+    ${LIBRARY_NAME} ${LEITOR}
       PROPERTIES
         CXX_STANDARD 17
         CXX_STANDARD_REQUIRED YES
