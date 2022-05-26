@@ -3,6 +3,7 @@
 #include <CRC.h>
 #include <NBR14522.h>
 #include <log_policy.h>
+#include <porta_serial/porta_serial.h>
 #include <task_scheduler.h>
 #include <timer.h>
 
@@ -31,10 +32,12 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
     } estado_t;
 
   private:
-    sptr<IPorta> _porta;
+    // sptr<IPorta> _porta;
+    sptr<PortaSerial> _porta;
 
   public:
-    Leitor(sptr<IPorta> porta) : _porta(porta) {}
+    // Leitor(sptr<IPorta> porta) : _porta(porta) {}
+    Leitor(sptr<PortaSerial> porta) : _porta(porta) {}
 
     estado_t read(comando_t& comando,
                   std::function<void(const resposta_t& rsp)> cb_rsp_received,
