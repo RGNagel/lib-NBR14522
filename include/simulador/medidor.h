@@ -23,7 +23,7 @@ using SysTimer = Timer<std::chrono::system_clock>;
  * possa ser usada como uma porta serial do ponto de vista do leitor.
  *
  */
-template <class LogPolicy = LogPolicyStdout> class Medidor : public IPorta {
+template <class LogPolicy = LogPolicyNull> class Medidor : public IPorta {
   private:
     RingBuffer<byte_t, 1024> _rb_received;
     RingBuffer<byte_t, 1024> _rb_transmitted;
@@ -63,6 +63,16 @@ template <class LogPolicy = LogPolicyStdout> class Medidor : public IPorta {
     Medidor(NBR14522::medidor_num_serie_t medidor = {1, 2, 3, 4})
         : _gerador(medidor) {}
 
+    Medidor(uint16_t qntdRespostasCmd26, uint16_t qntdRespostasCmd27,
+            uint16_t qntdRespostasCmd52)
+        : _gerador(qntdRespostasCmd26, qntdRespostasCmd27, qntdRespostasCmd52) {
+    }
+
+    Medidor(NBR14522::medidor_num_serie_t medidor, uint16_t qntdRespostasCmd26,
+            uint16_t qntdRespostasCmd27, uint16_t qntdRespostasCmd52)
+        : _gerador(medidor, qntdRespostasCmd26, qntdRespostasCmd27,
+                   qntdRespostasCmd52) {}
+
     void run() {
         LogPolicy::log("Iniciando execução...\n");
 
@@ -76,17 +86,17 @@ template <class LogPolicy = LogPolicyStdout> class Medidor : public IPorta {
         _flush(_rb_received);
         _flush(_rb_transmitted);
 
-        // envia ENQ e agenda próximo ENQ
-        LogPolicy::log("Enviando ENQ\n");
-        _rb_transmitted.write(NBR14522::ENQ);
-        SysTimer timerSendNextENQ;
-        timerSendNextENQ.setTimeout(ms(TMINENQ_MSEC));
-
         // de acordo com a norma, deveriamos receber o PRIMEIRO byte de
         // dado após no máximo ~TMAXSINC_MSEC depois de enviar o
         // ENQ.
         SysTimer timerShouldRecvDataWithin;
         timerShouldRecvDataWithin.setTimeout(ms(TMAXSINC_MSEC));
+
+        // envia ENQ e agenda próximo ENQ
+        LogPolicy::log("Enviando ENQ\n");
+        _rb_transmitted.write(NBR14522::ENQ);
+        SysTimer timerSendNextENQ;
+        timerSendNextENQ.setTimeout(ms(TMINENQ_MSEC));
 
         while (1) {
             // guard
@@ -198,12 +208,11 @@ template <class LogPolicy = LogPolicyStdout> class Medidor : public IPorta {
             resposta_t resposta;
             _gerador.getNextResposta(resposta);
 
-            // envia resposta
-            for (size_t i = 0; i < resposta.size(); i++)
-                _rb_transmitted.write(resposta.at(i));
-
             LogPolicy::log("Enviando resposta[" + std::to_string(r) +
                            "]. Aguarda ACK.\n");
+
+            for (size_t i = 0; i < resposta.size(); i++)
+                _rb_transmitted.write(resposta.at(i));
 
             // resposta enviada, aguarda ACK
             SysTimer timerAguardaACK;

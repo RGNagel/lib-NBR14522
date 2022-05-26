@@ -8,16 +8,32 @@
 class GeradorDeRespostas {
   private:
     byte_t _code;
-    static constexpr uint16_t _ComandoCompostoTamanho = 3;
     NBR14522::medidor_num_serie_t _serie;
+    uint16_t _qntdRespostasCmd26;
+    uint16_t _qntdRespostasCmd27;
+    uint16_t _qntdRespostasCmd52;
     uint16_t _respostaIndex;
     uint16_t _quantidadeDeRespostas;
 
     inline bool _comandoComposto() { return _quantidadeDeRespostas > 1; }
 
   public:
-    GeradorDeRespostas(NBR14522::medidor_num_serie_t medidor = {1, 2, 3, 4})
-        : _serie(medidor), _respostaIndex(0), _quantidadeDeRespostas(0) {}
+    GeradorDeRespostas(NBR14522::medidor_num_serie_t medidor = {1, 2, 3, 4},
+                       uint16_t qntdRespostasCmd26 = 15,
+                       uint16_t qntdRespostasCmd27 = 100,
+                       uint16_t qntdRespostasCmd52 = 235)
+        : _serie(medidor), _qntdRespostasCmd26(qntdRespostasCmd26),
+          _qntdRespostasCmd27(qntdRespostasCmd27),
+          _qntdRespostasCmd52(qntdRespostasCmd52), _respostaIndex(0),
+          _quantidadeDeRespostas(0) {}
+
+    GeradorDeRespostas(uint16_t qntdRespostasCmd26 = 15,
+                       uint16_t qntdRespostasCmd27 = 100,
+                       uint16_t qntdRespostasCmd52 = 235)
+        : _serie({1, 2, 3, 4}), _qntdRespostasCmd26(qntdRespostasCmd26),
+          _qntdRespostasCmd27(qntdRespostasCmd27),
+          _qntdRespostasCmd52(qntdRespostasCmd52), _respostaIndex(0),
+          _quantidadeDeRespostas(0) {}
 
     // retorna numero de respostas geradas
     uint16_t gerar(NBR14522::comando_t& comando) {
@@ -29,9 +45,13 @@ class GeradorDeRespostas {
         switch (_code) {
         // comandos compostos
         case 0x26:
+            _quantidadeDeRespostas = _qntdRespostasCmd26;
+            break;
         case 0x27:
+            _quantidadeDeRespostas = _qntdRespostasCmd27;
+            break;
         case 0x52:
-            _quantidadeDeRespostas = _ComandoCompostoTamanho;
+            _quantidadeDeRespostas = _qntdRespostasCmd52;
             break;
         default:
             _quantidadeDeRespostas = 1;
