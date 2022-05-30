@@ -144,9 +144,9 @@ TEST_CASE("Leitor") {
 
         dados_para_o_leitor.write(nak);
 
-        CHECK(leitor.processaEstado() == Leitor::estado_t::Desconectado);
-        CHECK(leitor.processaEstado() == Leitor::estado_t::Desconectado);
-        CHECK(leitor.processaEstado() == Leitor::estado_t::Desconectado);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
 
         CHECK(leitor.status() == Leitor::status_t::ErroLimiteDeNAKsRecebidos);
     }
@@ -272,6 +272,27 @@ TEST_CASE("Leitor") {
         rsp.fill(0x00);
         rsp.at(0) = 0x26;
         rsp.at(47) = 0xAB; // só pra ser diferente da resposta 1
+        setCRC(rsp, CRC16(rsp.data(), rsp.size() - 2));
+
+        for (size_t j = 0; j < RESPOSTA_SZ; j++) {
+            dados_para_o_leitor.write(rsp.at(j));
+            leitor.processaEstado();
+        }
+        CHECK(dados_para_o_medidor.read() == ACK);
+        CHECK(leitor.status() == Leitor::status_t::Processando);
+        CHECK(leitor.processaEstado() ==
+              Leitor::estado_t::RespostaCompostaParcialRecebida);
+        CHECK(leitor.processaEstado() ==
+              Leitor::estado_t::RespostaCompostaParcialRecebida);
+        CHECK(leitor.processaEstado() ==
+              Leitor::estado_t::RespostaCompostaParcialRecebida);
+        CHECK(leitor.resposta() == rsp);
+
+        // resposta intermediaria 3
+
+        rsp.fill(0x00);
+        rsp.at(0) = 0x26;
+        rsp.at(22) = 0xCD; // só pra ser diferente da resposta 1 e 2
         setCRC(rsp, CRC16(rsp.data(), rsp.size() - 2));
 
         for (size_t j = 0; j < RESPOSTA_SZ; j++) {

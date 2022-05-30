@@ -13,19 +13,21 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
         Desconectado,
         Sincronizado,
         ComandoTransmitido,
+        AtrasoDeSequenciaRecebido,
         CodigoRecebido,
         RespostaCompostaParcialRecebida,
         AguardaNovoComando,
-        // RespostaValidaRecebida
     } estado_t;
 
     typedef enum {
         Sucesso,
-        RespostaCompostaIncompleta,
         Processando,
+        RespostaCompostaIncompleta,
         ErroLimiteDeNAKsRecebidos,
         ErroLimiteDeNAKsTransmitidos,
         ErroLimiteDeTransmissoesSemRespostas,
+        ErroTempoSemWaitEsgotado,
+        ErroLimiteDeWaitsRecebidos,
     } status_t;
 
     void setComando(const NBR14522::comando_t& comando) {
@@ -66,7 +68,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
         case ComandoTransmitido:
             if (_timer.timedOut()) {
                 _counterSemResposta++;
-                if (_counterSemResposta < 7) {
+                if (_counterSemResposta < NBR14522::MAX_COMANDO_SEM_RESPOSTA) {
                     _transmiteComando();
                     _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
                 } else {
@@ -79,18 +81,47 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                 // byte recebido
                 if (byte == NBR14522::NAK) {
                     _counterNakRecebido++;
-                    if (_counterNakRecebido < 7) {
-                        _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                    } else {
+                    if (_counterNakRecebido == NBR14522::MAX_BLOCO_NAK) {
                         _status = ErroLimiteDeNAKsRecebidos;
-                        _estado = Desconectado;
+                        _estado = AguardaNovoComando;
+                    } else {
+                        _transmiteComando();
+                        _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
                     }
+                } else if (byte == NBR14522::WAIT) {
+                    _estado = AtrasoDeSequenciaRecebido;
+                    _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
                 } else if (byte == _comando.at(0)) {
                     // código do comando
                     _resposta.at(0) = byte;
                     _respostaBytesLidos = 1;
                     _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
                     _estado = CodigoRecebido;
+                }
+            }
+            break;
+        case AtrasoDeSequenciaRecebido:
+            if (_timer.timedOut()) {
+                // falhou
+                _estado = AguardaNovoComando;
+                _status = ErroTempoSemWaitEsgotado;
+                _esvaziaPortaSerial();
+            } else if (_porta->read(&byte, 1)) {
+                // byte recebido
+                if (byte == NBR14522::ENQ) {
+                    _estado = ComandoTransmitido;
+                    _transmiteComando();
+                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                } else if (byte == NBR14522::WAIT) {
+                    _counterWaitRecebido++;
+                    if (_counterWaitRecebido == NBR14522::MAX_BLOCO_WAIT) {
+                        // falhou
+                        _estado = AguardaNovoComando;
+                        _status = ErroLimiteDeWaitsRecebidos;
+                        _esvaziaPortaSerial();
+                    } else {
+                        _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
+                    }
                 }
             }
             break;
@@ -105,14 +136,14 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
 
             if (_timer.timedOut()) {
                 _counterSemResposta++;
-                if (_counterSemResposta < 7) {
-                    _transmiteComando();
-                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                } else {
+                if (_counterSemResposta == NBR14522::MAX_COMANDO_SEM_RESPOSTA) {
                     // falhou
                     _estado = AguardaNovoComando;
                     _status = ErroLimiteDeTransmissoesSemRespostas;
                     _esvaziaPortaSerial();
+                } else {
+                    _transmiteComando();
+                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
                 }
             } else if (_respostaBytesLidos >= NBR14522::RESPOSTA_SZ) {
                 // resposta completa recebida, verifica CRC
@@ -142,14 +173,14 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     byte = NBR14522::NAK;
                     _porta->write(&byte, 1);
                     _counterNakTransmitido++;
-                    if (_counterNakTransmitido < 7) {
-                        _estado = estado_t::ComandoTransmitido;
-                        _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                    } else {
+                    if (_counterNakTransmitido == NBR14522::MAX_BLOCO_NAK) {
                         // falhou
                         _estado = estado_t::AguardaNovoComando;
                         _status = status_t::ErroLimiteDeNAKsTransmitidos;
                         _esvaziaPortaSerial();
+                    } else {
+                        _estado = estado_t::ComandoTransmitido;
+                        _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
                     }
                 }
             }
@@ -184,6 +215,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
     uint32_t counterNakRecebido() { return _counterNakRecebido; }
     uint32_t counterNakTransmitido() { return _counterNakTransmitido; }
     uint32_t counterSemResposta() { return _counterSemResposta; }
+    uint32_t counterWaitRecebido() { return _counterWaitRecebido; }
     status_t status() { return _status; }
 
     NBR14522::resposta_t resposta() { return _resposta; }
@@ -199,6 +231,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
     uint32_t _counterNakRecebido = 0;
     uint32_t _counterNakTransmitido = 0;
     uint32_t _counterSemResposta = 0;
+    uint32_t _counterWaitRecebido = 0;
 
     void _esvaziaPortaSerial() {
         byte_t byte;

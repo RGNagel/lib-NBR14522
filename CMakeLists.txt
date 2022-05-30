@@ -90,14 +90,18 @@ target_set_warnings(${LIBRARY_NAME} ENABLE ALL ALL DISABLE Annoying)
 
 set(MEDIDOR_SIMULADOR medidor_simulador)
 
-add_executable(${MEDIDOR_SIMULADOR} app/simulador/medidor.cpp)
+# add_executable(${MEDIDOR_SIMULADOR} app/simulador/medidor.cpp)
 find_package(Threads)
-target_link_libraries(${MEDIDOR_SIMULADOR} PRIVATE ${LIBRARY_NAME} Threads::Threads)
-target_set_warnings(${MEDIDOR_SIMULADOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
-target_enable_lto(${MEDIDOR_SIMULADOR} optimized)  # enable link-time-optimization if available for non-debug configurations
+# target_link_libraries(${MEDIDOR_SIMULADOR} PRIVATE ${LIBRARY_NAME} Threads::Threads)
+# target_set_warnings(${MEDIDOR_SIMULADOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
+# target_enable_lto(${MEDIDOR_SIMULADOR} optimized)  # enable link-time-optimization if available for non-debug configurations
+
+################
+# leitor CLI app 
+################
 
 set(LEITOR leitor)
-add_executable(${LEITOR} app/leitor.cpp ${SOURCE_PORTA_SERIAL})
+add_executable(${LEITOR} app/leitor/leitor.cpp ${SOURCE_PORTA_SERIAL})
 target_link_libraries(${LEITOR} PRIVATE ${LIBRARY_NAME})
 target_set_warnings(${LEITOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
 target_enable_lto(${LEITOR} optimized)  # enable link-time-optimization if available for non-debug configurations
