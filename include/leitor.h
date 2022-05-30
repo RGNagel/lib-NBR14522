@@ -1,197 +1,223 @@
-#pragma once
-
 #include <CRC.h>
 #include <NBR14522.h>
 #include <log_policy.h>
+#include <memory>
 #include <porta_serial/porta_serial.h>
-#include <task_scheduler.h>
-#include <timer.h>
-
-namespace NBR14522 {
+#include <timer/timer.h>
 
 template <typename T> using sptr = std::shared_ptr<T>;
-
-using ms = std::chrono::milliseconds;
 
 template <class LogPolicy = LogPolicyStdout> class Leitor {
   public:
     typedef enum {
-        RSP_RECEBIDA,
-
-        ERR_SINC_TEMPO_EXCEDIDO,
-        ERR_SINC_SINALIZADOR,
-
-        ERR_RSP_NAK_EXCEDIDO,
-        ERR_RSP_CODIGO_TEMPO_EXCEDIDO,
-
-        ERR_RSP_NAK_TX_EXCEDIDO,
-        ERR_RSP_TOTAL_TEMPO_EXCEDIDO,
-
-        ERR_RSP_CODIGO_DIFERE,
-        ERR_RSP_CODIGO_INVALIDO_ENQ
+        Desconectado,
+        Sincronizado,
+        ComandoTransmitido,
+        CodigoRecebido,
+        RespostaCompostaParcialRecebida,
+        AguardaNovoComando,
+        // RespostaValidaRecebida
     } estado_t;
 
-  private:
-    // sptr<IPorta> _porta;
-    sptr<PortaSerial> _porta;
+    typedef enum {
+        Sucesso,
+        RespostaCompostaIncompleta,
+        Processando,
+        ErroLimiteDeNAKsRecebidos,
+        ErroLimiteDeNAKsTransmitidos,
+        ErroLimiteDeTransmissoesSemRespostas,
+    } status_t;
 
-  public:
-    // Leitor(sptr<IPorta> porta) : _porta(porta) {}
+    void setComando(const NBR14522::comando_t& comando) {
+        _comando = comando;
+        _estado = Desconectado;
+        _status = Processando;
+        _esvaziaPortaSerial();
+    }
+    estado_t processaEstado() {
+
+        byte_t byte;
+        size_t bytesLidosSz;
+
+        switch (_estado) {
+        case AguardaNovoComando:
+            // nao faz nada neste estado, aguardando comando ser setado em
+            // setComando()
+            break;
+        case Desconectado:
+            if (_porta->read(&byte, 1) && byte == NBR14522::ENQ) {
+                _estado = Sincronizado;
+                _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
+            }
+            break;
+        case Sincronizado:
+            if (_timer.timedOut()) {
+                _estado = Desconectado;
+                _esvaziaPortaSerial();
+            } else if (_porta->read(&byte, 1) && byte == NBR14522::ENQ) {
+                _transmiteComando();
+                _counterNakRecebido = 0;
+                _counterNakTransmitido = 0;
+                _counterSemResposta = 0;
+                _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                _estado = ComandoTransmitido;
+            }
+            break;
+        case ComandoTransmitido:
+            if (_timer.timedOut()) {
+                _counterSemResposta++;
+                if (_counterSemResposta < 7) {
+                    _transmiteComando();
+                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                } else {
+                    // falhou
+                    _estado = AguardaNovoComando;
+                    _status = ErroLimiteDeTransmissoesSemRespostas;
+                    _esvaziaPortaSerial();
+                }
+            } else if (_porta->read(&byte, 1)) {
+                // byte recebido
+                if (byte == NBR14522::NAK) {
+                    _counterNakRecebido++;
+                    if (_counterNakRecebido < 7) {
+                        _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                    } else {
+                        _status = ErroLimiteDeNAKsRecebidos;
+                        _estado = Desconectado;
+                    }
+                } else if (byte == _comando.at(0)) {
+                    // código do comando
+                    _resposta.at(0) = byte;
+                    _respostaBytesLidos = 1;
+                    _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
+                    _estado = CodigoRecebido;
+                }
+            }
+            break;
+        case CodigoRecebido:
+            bytesLidosSz =
+                _porta->read(&_resposta[_respostaBytesLidos],
+                             NBR14522::RESPOSTA_SZ - _respostaBytesLidos);
+            _respostaBytesLidos += bytesLidosSz;
+
+            if (bytesLidosSz)
+                _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
+
+            if (_timer.timedOut()) {
+                _counterSemResposta++;
+                if (_counterSemResposta < 7) {
+                    _transmiteComando();
+                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                } else {
+                    // falhou
+                    _estado = AguardaNovoComando;
+                    _status = ErroLimiteDeTransmissoesSemRespostas;
+                    _esvaziaPortaSerial();
+                }
+            } else if (_respostaBytesLidos >= NBR14522::RESPOSTA_SZ) {
+                // resposta completa recebida, verifica CRC
+                if (NBR14522::getCRC(_resposta) ==
+                    CRC16(_resposta.data(), _resposta.size() - 2)) {
+                    // CRC correto
+                    // transmite ACK
+                    byte = NBR14522::ACK;
+                    _porta->write(&byte, 1);
+                    if (_isComposto(_resposta.at(0))) {
+                        if (_isRespostaFinalDeComandoComposto(_resposta)) {
+                            // resposta composta recebida por completo, sucesso
+                            _estado = estado_t::AguardaNovoComando;
+                            _status = Sucesso;
+                        } else {
+                            _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                            _estado = RespostaCompostaParcialRecebida;
+                        }
+                    } else {
+                        // resposta simples recebido, sucesso
+                        _estado = estado_t::AguardaNovoComando;
+                        _status = Sucesso;
+                    }
+                } else {
+                    // CRC incorreto
+                    // transmite NAK
+                    byte = NBR14522::NAK;
+                    _porta->write(&byte, 1);
+                    _counterNakTransmitido++;
+                    if (_counterNakTransmitido < 7) {
+                        _estado = estado_t::ComandoTransmitido;
+                        _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                    } else {
+                        // falhou
+                        _estado = estado_t::AguardaNovoComando;
+                        _status = status_t::ErroLimiteDeNAKsTransmitidos;
+                        _esvaziaPortaSerial();
+                    }
+                }
+            }
+            break;
+        case RespostaCompostaParcialRecebida:
+            if (_timer.timedOut()) {
+                // resposta composta parcialmente recebida
+                _estado = AguardaNovoComando;
+                _status = RespostaCompostaIncompleta;
+            } else if (_porta->read(&byte, 1)) {
+                // byte recebido
+                if (byte == NBR14522::ENQ) {
+                    // resposta composta parcialmente recebida
+                    _estado = AguardaNovoComando;
+                    _status = RespostaCompostaIncompleta;
+                } else if (byte == _comando.at(0)) {
+                    // vai para a leitura da próxima resposta (composta)
+                    _estado = CodigoRecebido;
+                    _respostaBytesLidos = 1;
+                    _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
+                }
+            }
+
+            break;
+        }
+
+        return _estado;
+    }
+
     Leitor(sptr<PortaSerial> porta) : _porta(porta) {}
 
-    estado_t read(comando_t& comando,
-                  std::function<void(const resposta_t& rsp)> cb_rsp_received,
-                  std::chrono::milliseconds timeout) {
+    uint32_t counterNakRecebido() { return _counterNakRecebido; }
+    uint32_t counterNakTransmitido() { return _counterNakTransmitido; }
+    uint32_t counterSemResposta() { return _counterSemResposta; }
+    status_t status() { return _status; }
 
-        Timer<> txTimer(timeout);
+    NBR14522::resposta_t resposta() { return _resposta; }
 
-        resposta_t resposta;
-        size_t respostaIndex = 0;
+  private:
+    estado_t _estado = Desconectado;
+    status_t _status = Processando;
+    sptr<PortaSerial> _porta;
+    Timer _timer;
+    NBR14522::comando_t _comando;
+    NBR14522::resposta_t _resposta;
+    size_t _respostaBytesLidos;
+    uint32_t _counterNakRecebido = 0;
+    uint32_t _counterNakTransmitido = 0;
+    uint32_t _counterSemResposta = 0;
 
-        // discarta todos os bytes até agora da porta
-        byte_t data;
-        while (_porta->read(&data, 1))
+    void _esvaziaPortaSerial() {
+        byte_t byte;
+        while (_porta->read(&byte, 1))
             ;
+    }
 
-        // aguarda ENQ da porta
-        Timer<> timer;
-        byte_t enq = 0;
-        timer.setTimeout(ms(TMAXENQ_MSEC));
-        while (!timer.timedOut() && !txTimer.timedOut()) {
-            if (_porta->read(&enq, 1) == 1)
-                break;
-        }
+    void _transmiteComando() {
+        // nao incluir os dois ultimos bytes de CRC no calculo do CRC
+        NBR14522::setCRC(_comando, CRC16(_comando.data(), _comando.size() - 2));
+        _porta->write(_comando.data(), _comando.size());
+    }
 
-        if (txTimer.timedOut() || timer.timedOut())
-            return ERR_SINC_TEMPO_EXCEDIDO;
+    bool _isComposto(const byte_t codigo) {
+        return codigo == 0x26 || codigo == 0x27 || codigo == 0x52;
+    }
 
-        if (enq != ENQ)
-            return ERR_SINC_SINALIZADOR;
-
-        // sincronizado
-
-        setCRC(comando, CRC16(comando.data(), comando.size() - 2));
-        _porta->write(comando.data(), comando.size());
-
-        // ---------------------------------
-        // Aguarda primeiro byte da resposta
-        // ---------------------------------
-
-    waitFirstByte:
-        size_t countReceivedNAK = 0;
-
-        // devemos receber o primeiro byte da resposta em até TMAXRSP
-        timer.setTimeout(ms(TMAXRSP_MSEC));
-        while (!timer.timedOut() && !txTimer.timedOut()) {
-
-            byte_t firstByte = 0;
-            if (_porta->read(&firstByte, 1) == 1) {
-                if (firstByte == NAK) {
-                    countReceivedNAK++;
-                    // devemos enviar novamente o comando ao medidor, caso menos
-                    // de 7 NAKs recebidos
-                    if (countReceivedNAK >= MAX_BLOCO_NAK) {
-                        return ERR_RSP_NAK_EXCEDIDO;
-                    } else {
-                        // retransmite comando
-                        _porta->write(comando.data(), comando.size());
-                        continue;
-                    }
-                } else if (firstByte == ENQ) {
-                    return ERR_RSP_CODIGO_INVALIDO_ENQ;
-                } else if (firstByte != comando.at(0)) {
-                    return ERR_RSP_CODIGO_DIFERE;
-                }
-
-                // primeiro byte recebido OK!
-
-                resposta.at(0) = firstByte;
-                respostaIndex = 1;
-                break;
-            }
-        }
-
-        if (txTimer.timedOut() || timer.timedOut())
-            return ERR_RSP_CODIGO_TEMPO_EXCEDIDO;
-
-        size_t countTxNAK = 0;
-
-        // ----------------------------------------------------------
-        // Primeiro byte recebido. Agora aguarda restante da resposta
-        // ----------------------------------------------------------
-
-        timer.setTimeout(ms(TMAXCAR_MSEC));
-        while (!timer.timedOut() || !txTimer.timedOut()) {
-            size_t read = _porta->read(&resposta[respostaIndex],
-                                       resposta.size() - respostaIndex);
-            respostaIndex += read;
-
-            if (read)
-                timer.setTimeout(
-                    ms(TMAXCAR_MSEC)); // recarrega timeout para
-                                       // receber próximo(s) byte(s)
-            if (respostaIndex < resposta.size())
-                continue;
-
-            // ------------------------------------
-            // resposta completa recebida. Trata-a.
-            // ------------------------------------
-
-            uint16_t crcRecv = getCRC(resposta);
-            uint16_t crcCalc = CRC16(resposta.data(), resposta.size() - 2);
-
-            if (crcRecv != crcCalc) {
-                // se CRC com erro, o medidor deve enviar um NAK para o
-                // leitor e aguardar novo COMANDO. O máximo de NAKs
-                // enviados para um mesmo comando é 7.
-
-                if (countTxNAK >= MAX_BLOCO_NAK)
-                    return ERR_RSP_NAK_TX_EXCEDIDO;
-
-                byte_t sinalizador = NAK;
-                _porta->write(&sinalizador, 1);
-
-                countTxNAK++;
-
-                timer.setTimeout(ms(TMAXRSP_MSEC));
-                continue;
-            }
-
-            // -----------------------------------
-            // resposta completa recebida está OK!
-            // -----------------------------------
-
-            byte_t sinalizador = ACK;
-            _porta->write(&sinalizador, 1);
-            // TODO (maybe): talvez tenha q add um tempo aqui pra ter certeza
-            // que o medidor recebeu o ACK
-
-            cb_rsp_received(resposta);
-
-            if (isComposedCodeCommand(resposta.at(0))) {
-                // os unicos 3 comandos compostos existentes na norma (0x26,
-                // 0x27 e 0x52) possuem o octeto 006 (5o byte), cujo valor:
-                // 0N -> resposta/bloco intermediário
-                // 1N -> resposta/bloco final
-
-                if (resposta.at(5) & 0x10) {
-                    // resposta final do comando composto
-                    return RSP_RECEBIDA;
-                } else {
-                    // resposta intermediária, aguarda próxima resposta
-
-                    // recarrega timeout da leitura
-                    txTimer.setTimeout(timeout);
-                    goto waitFirstByte;
-                }
-
-            } else {
-                return RSP_RECEBIDA;
-            }
-        }
-
-        return ERR_RSP_TOTAL_TEMPO_EXCEDIDO;
+    bool
+    _isRespostaFinalDeComandoComposto(const NBR14522::resposta_t& resposta) {
+        return resposta.at(5) & 0x10;
     }
 };
-
-} // namespace NBR14522

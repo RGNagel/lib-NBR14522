@@ -1,6 +1,7 @@
 #include <NBR14522.h>
 #include <iporta.h>
-#include <leitor.h>
+#include <leitor_old.h>
+#include <memory>
 #include <porta_serial/porta_serial.h>
 
 using namespace NBR14522;

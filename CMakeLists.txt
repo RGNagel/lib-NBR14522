@@ -38,23 +38,26 @@ find_lto(CXX)
 # --------------------------------------------------------------------------------
 #                         Locate files (change as needed).
 # --------------------------------------------------------------------------------
+
+# platform-specific sources
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux" OR ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+    set(SOURCE_PORTA_SERIAL src/porta_serial/win_unix/porta_serial.cpp src/porta_serial/win_unix/serialib.cpp)
+    set(SOURCE_TIMER ${SOURCES} src/timer/win_unix/timer.cpp)
+#elseif()
+#else()
+    # ...
+endif()
+
 set(SOURCES          # All .cpp files in src/
     # src/example.cpp
     src/CRC.cpp
+    ${SOURCE_TIMER}
 )
 set(TESTFILES        # All .cpp files in tests/
     tests/main.cpp
 )
 set(LIBRARY_NAME NBR14522)  # Default name for the library built from src/*.cpp (change if you wish)
-
-# porta serial sources
-
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux" OR ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
-    set(SOURCES_PORTA_SERIAL src/porta_serial/win_unix/porta_serial.cpp src/porta_serial/win_unix/serialib.cpp)
-#elseif()
-#else()
-    # ...
-endif()
 
 # --------------------------------------------------------------------------------
 #                            Build! (Change as needed)
@@ -94,7 +97,7 @@ target_set_warnings(${MEDIDOR_SIMULADOR} ENABLE ALL ALL DISABLE Annoying) # Set 
 target_enable_lto(${MEDIDOR_SIMULADOR} optimized)  # enable link-time-optimization if available for non-debug configurations
 
 set(LEITOR leitor)
-add_executable(${LEITOR} app/leitor.cpp ${SOURCES_PORTA_SERIAL})
+add_executable(${LEITOR} app/leitor.cpp ${SOURCE_PORTA_SERIAL})
 target_link_libraries(${LEITOR} PRIVATE ${LIBRARY_NAME})
 target_set_warnings(${LEITOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
 target_enable_lto(${LEITOR} optimized)  # enable link-time-optimization if available for non-debug configurations

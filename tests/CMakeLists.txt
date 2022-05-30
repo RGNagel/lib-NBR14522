@@ -1,15 +1,14 @@
 cmake_minimum_required(VERSION 3.14)
 
 # List all files containing tests. (Change as needed)
-set(TESTFILES        # All .cpp files in tests/
+set(TESTFILES
     main.cpp
-    # dummy.cpp
     ring_buffer.cpp
     CRC.cpp
-    # leitor.cpp
-    simulador/medidor.cpp
-    simulador/gerador_de_respostas.cpp
-    task_scheduler.cpp
+    leitor.cpp
+    # leitor_com_medidor_simulado.cpp
+    # simulador/medidor.cpp
+    # simulador/gerador_de_respostas.cpp
     BCD.cpp
     timer.cpp
 )
