@@ -153,6 +153,11 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     // transmite ACK
                     byte = NBR14522::ACK;
                     _porta->write(&byte, 1);
+                    // resetar contadores, pois são referentes a cada resposta
+                    _counterNakRecebido = 0;
+                    _counterNakTransmitido = 0;
+                    _counterSemResposta = 0;
+                    _counterWaitRecebido = 0;
                     if (_isComposto(_resposta.at(0))) {
                         if (_isRespostaFinalDeComandoComposto(_resposta)) {
                             // resposta composta recebida por completo, sucesso
