@@ -28,6 +28,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
         ErroLimiteDeTransmissoesSemRespostas,
         ErroTempoSemWaitEsgotado,
         ErroLimiteDeWaitsRecebidos,
+        ErroQuebraDeSequencia,
     } status_t;
 
     void setComando(const NBR14522::comando_t& comando) {
@@ -97,6 +98,14 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     _respostaBytesLidos = 1;
                     _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
                     _estado = CodigoRecebido;
+                } else {
+                    // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
+                    // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
+                    // DE SEQUÊNCIA"
+                    _estado = Sincronizado;
+                    _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
+                    _status = ErroQuebraDeSequencia;
+                    // TODO ou deveria cancelar a operacao aqui?
                 }
             }
             break;
@@ -206,6 +215,14 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     _estado = CodigoRecebido;
                     _respostaBytesLidos = 1;
                     _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
+                } else {
+                    // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
+                    // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
+                    // DE SEQUÊNCIA"
+                    _estado = Sincronizado;
+                    _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
+                    _status = ErroQuebraDeSequencia;
+                    // TODO ou deveria cancelar a operacao aqui?
                 }
             }
 
