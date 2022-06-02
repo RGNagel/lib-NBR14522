@@ -10,7 +10,7 @@ template <typename T> using sptr = std::shared_ptr<T>;
 template <class LogPolicy = LogPolicyStdout> class Leitor {
   public:
     typedef enum {
-        Desconectado,
+        Dessincronizado,
         Sincronizado,
         ComandoTransmitido,
         AtrasoDeSequenciaRecebido,
@@ -33,7 +33,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
 
     void setComando(const NBR14522::comando_t& comando) {
         _comando = comando;
-        _estado = Desconectado;
+        _estado = Dessincronizado;
         _status = Processando;
         _esvaziaPortaSerial();
     }
@@ -47,7 +47,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
             // nao faz nada neste estado, aguardando comando ser setado em
             // setComando()
             break;
-        case Desconectado:
+        case Dessincronizado:
             if (_porta->read(&byte, 1) && byte == NBR14522::ENQ) {
                 _estado = Sincronizado;
                 _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
@@ -55,7 +55,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
             break;
         case Sincronizado:
             if (_timer.timedOut()) {
-                _estado = Desconectado;
+                _estado = Dessincronizado;
                 _esvaziaPortaSerial();
             } else if (_porta->read(&byte, 1) && byte == NBR14522::ENQ) {
                 _transmiteComando();
@@ -92,7 +92,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                 } else if (byte == NBR14522::WAIT) {
                     _estado = AtrasoDeSequenciaRecebido;
                     _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
-                } else if (byte == _comando.at(0)) {
+                } else if (byte == _comando.at(0) || byte == NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor) {
                     // código do comando
                     _resposta.at(0) = byte;
                     _respostaBytesLidos = 1;
@@ -102,10 +102,9 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
                     // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
                     // DE SEQUÊNCIA"
-                    _estado = Sincronizado;
+                    _estado = Dessincronizado;
                     _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
                     _status = ErroQuebraDeSequencia;
-                    // TODO ou deveria cancelar a operacao aqui?
                 }
             }
             break;
@@ -219,10 +218,9 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
                     // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
                     // DE SEQUÊNCIA"
-                    _estado = Sincronizado;
+                    _estado = Dessincronizado;
                     _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
                     _status = ErroQuebraDeSequencia;
-                    // TODO ou deveria cancelar a operacao aqui?
                 }
             }
 
@@ -243,7 +241,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
     NBR14522::resposta_t resposta() { return _resposta; }
 
   private:
-    estado_t _estado = Desconectado;
+    estado_t _estado = Dessincronizado;
     status_t _status = Processando;
     sptr<PortaSerial> _porta;
     Timer _timer;
