@@ -4,9 +4,6 @@
 #include <array>
 #include <vector>
 
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
-
 typedef unsigned char byte_t;
 
 namespace NBR14522 {
@@ -252,7 +249,6 @@ enum Regra {
     // tempo máximo entre dois WAIT subsequentes (tempo máximo sem WAIT)
     TSEMWAIT_SEC = 305,
 };
-
 
 constexpr byte_t CodigoInformacaoDeOcorrenciaNoMedidor = 0x40;
 

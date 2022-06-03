@@ -21,9 +21,6 @@ set(TEST_RUNNER_PARAMS "")  # Any arguments to feed the test runner (change as n
 # --------------------------------------------------------------------------------
 add_executable(${TEST_MAIN} ${TESTFILES})
 
-find_package(Threads)
-target_link_libraries(${TEST_MAIN} PRIVATE ${LIBRARY_NAME} Threads::Threads)
-
 target_link_libraries(${TEST_MAIN} PRIVATE ${LIBRARY_NAME} doctest)
 set_target_properties(${TEST_MAIN} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 target_set_warnings(${TEST_MAIN} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).

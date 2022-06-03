@@ -43,25 +43,20 @@ find_lto(CXX)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux" OR ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
     set(SOURCE_PORTA_SERIAL src/porta_serial/win_unix/porta_serial.cpp src/porta_serial/win_unix/serialib.cpp)
-    set(SOURCE_TIMER ${SOURCES} src/timer/win_unix/timer.cpp)
+    set(SOURCE_TIMER src/timer/win_unix/timer.cpp)
 #elseif()
 #else()
     # ...
 endif()
 
-set(SOURCES          # All .cpp files in src/
-    # src/example.cpp
+set(SOURCES
     src/CRC.cpp
-    ${SOURCE_TIMER}
+    # ${SOURCE_TIMER}
 )
-set(TESTFILES        # All .cpp files in tests/
-    tests/main.cpp
-)
+
 set(LIBRARY_NAME NBR14522)  # Default name for the library built from src/*.cpp (change if you wish)
 
-# --------------------------------------------------------------------------------
-#                            Build! (Change as needed)
-# --------------------------------------------------------------------------------
+
 # Compile all sources into a library.
 add_library(${LIBRARY_NAME} OBJECT ${SOURCES})
 
@@ -69,7 +64,7 @@ add_library(${LIBRARY_NAME} OBJECT ${SOURCES})
 target_include_directories(${LIBRARY_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 # There's also (probably) doctests within the library, so we need to see this as well.
-target_link_libraries(${LIBRARY_NAME} PUBLIC doctest)
+# target_link_libraries(${LIBRARY_NAME} PUBLIC doctest)
 
 # Set the compile options you want (change as needed).
 target_set_warnings(${LIBRARY_NAME} ENABLE ALL ALL DISABLE Annoying)
@@ -100,11 +95,11 @@ find_package(Threads)
 # leitor CLI app 
 ################
 
-set(LEITOR leitor)
-add_executable(${LEITOR} app/leitor/leitor.cpp ${SOURCE_PORTA_SERIAL})
-target_link_libraries(${LEITOR} PRIVATE ${LIBRARY_NAME})
-target_set_warnings(${LEITOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
-target_enable_lto(${LEITOR} optimized)  # enable link-time-optimization if available for non-debug configurations
+# set(LEITOR leitor)
+# add_executable(${LEITOR} app/leitor/leitor.cpp ${SOURCE_PORTA_SERIAL} ${SOURCE_TIMER})
+# target_link_libraries(${LEITOR} PRIVATE ${LIBRARY_NAME})
+# target_set_warnings(${LEITOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
+# target_enable_lto(${LEITOR} optimized)  # enable link-time-optimization if available for non-debug configurations
 
 # Set the properties you require, e.g. what C++ standard to use. Here applied to library and main (change as needed).
 set_target_properties(

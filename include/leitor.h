@@ -1,13 +1,11 @@
+#pragma once
 #include <CRC.h>
 #include <NBR14522.h>
-#include <log_policy.h>
 #include <memory>
-#include <porta_serial/porta_serial.h>
-#include <timer/timer.h>
 
 template <typename T> using sptr = std::shared_ptr<T>;
 
-template <class LogPolicy = LogPolicyStdout> class Leitor {
+template <class TimerPolicy, class SerialPolicy> class Leitor {
   public:
     typedef enum {
         Dessincronizado,
@@ -48,7 +46,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
             // setComando()
             break;
         case Dessincronizado:
-            if (_porta->read(&byte, 1) && byte == NBR14522::ENQ) {
+            if (_porta->rx(&byte, 1) && byte == NBR14522::ENQ) {
                 _estado = Sincronizado;
                 _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
             }
@@ -57,7 +55,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
             if (_timer.timedOut()) {
                 _estado = Dessincronizado;
                 _esvaziaPortaSerial();
-            } else if (_porta->read(&byte, 1) && byte == NBR14522::ENQ) {
+            } else if (_porta->rx(&byte, 1) && byte == NBR14522::ENQ) {
                 _transmiteComando();
                 _counterNakRecebido = 0;
                 _counterNakTransmitido = 0;
@@ -78,7 +76,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     _status = ErroLimiteDeTransmissoesSemRespostas;
                     _esvaziaPortaSerial();
                 }
-            } else if (_porta->read(&byte, 1)) {
+            } else if (_porta->rx(&byte, 1)) {
                 // byte recebido
                 if (byte == NBR14522::NAK) {
                     _counterNakRecebido++;
@@ -92,7 +90,9 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                 } else if (byte == NBR14522::WAIT) {
                     _estado = AtrasoDeSequenciaRecebido;
                     _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
-                } else if (byte == _comando.at(0) || byte == NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor) {
+                } else if (byte == _comando.at(0) ||
+                           byte == NBR14522::
+                                       CodigoInformacaoDeOcorrenciaNoMedidor) {
                     // código do comando
                     _resposta.at(0) = byte;
                     _respostaBytesLidos = 1;
@@ -114,7 +114,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                 _estado = AguardaNovoComando;
                 _status = ErroTempoSemWaitEsgotado;
                 _esvaziaPortaSerial();
-            } else if (_porta->read(&byte, 1)) {
+            } else if (_porta->rx(&byte, 1)) {
                 // byte recebido
                 if (byte == NBR14522::ENQ) {
                     _estado = ComandoTransmitido;
@@ -142,8 +142,8 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
             break;
         case CodigoRecebido:
             bytesLidosSz =
-                _porta->read(&_resposta[_respostaBytesLidos],
-                             NBR14522::RESPOSTA_SZ - _respostaBytesLidos);
+                _porta->rx(&_resposta[_respostaBytesLidos],
+                           NBR14522::RESPOSTA_SZ - _respostaBytesLidos);
             _respostaBytesLidos += bytesLidosSz;
 
             if (bytesLidosSz)
@@ -167,7 +167,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     // CRC correto
                     // transmite ACK
                     byte = NBR14522::ACK;
-                    _porta->write(&byte, 1);
+                    _porta->tx(&byte, 1);
                     // resetar contadores, pois são referentes a cada resposta
                     _counterNakRecebido = 0;
                     _counterNakTransmitido = 0;
@@ -191,7 +191,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     // CRC incorreto
                     // transmite NAK
                     byte = NBR14522::NAK;
-                    _porta->write(&byte, 1);
+                    _porta->tx(&byte, 1);
                     _counterNakTransmitido++;
                     if (_counterNakTransmitido == NBR14522::MAX_BLOCO_NAK) {
                         // falhou
@@ -210,7 +210,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                 // resposta composta parcialmente recebida
                 _estado = AguardaNovoComando;
                 _status = RespostaCompostaIncompleta;
-            } else if (_porta->read(&byte, 1)) {
+            } else if (_porta->rx(&byte, 1)) {
                 // byte recebido
                 if (byte == NBR14522::ENQ) {
                     // resposta composta parcialmente recebida
@@ -237,7 +237,7 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
         return _estado;
     }
 
-    Leitor(sptr<PortaSerial> porta) : _porta(porta) {}
+    Leitor(sptr<SerialPolicy> porta) : _porta(porta) {}
 
     uint32_t counterNakRecebido() { return _counterNakRecebido; }
     uint32_t counterNakTransmitido() { return _counterNakTransmitido; }
@@ -250,8 +250,8 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
   private:
     estado_t _estado = Dessincronizado;
     status_t _status = Processando;
-    sptr<PortaSerial> _porta;
-    Timer _timer;
+    sptr<SerialPolicy> _porta;
+    TimerPolicy _timer;
     NBR14522::comando_t _comando;
     NBR14522::resposta_t _resposta;
     size_t _respostaBytesLidos;
@@ -262,14 +262,14 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
 
     void _esvaziaPortaSerial() {
         byte_t byte;
-        while (_porta->read(&byte, 1))
+        while (_porta->rx(&byte, 1))
             ;
     }
 
     void _transmiteComando() {
         // nao incluir os dois ultimos bytes de CRC no calculo do CRC
         NBR14522::setCRC(_comando, CRC16(_comando.data(), _comando.size() - 2));
-        _porta->write(_comando.data(), _comando.size());
+        _porta->tx(_comando.data(), _comando.size());
     }
 
     bool _isComposto(const byte_t codigo) {

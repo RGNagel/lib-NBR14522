@@ -1,13 +1,13 @@
 #include <chrono>
 #include <doctest/doctest.h>
 #include <thread>
-#include <timer/timer.h>
+#include <timer/timer_policy_win_unix.h>
 
 using namespace std::literals;
 
-TEST_CASE("Timer") {
+TEST_CASE("TimerPolicyWinUnix") {
 
-    Timer t;
+    TimerPolicyWinUnix t;
 
     t.setTimeout(10);
     CHECK(!t.timedOut());
