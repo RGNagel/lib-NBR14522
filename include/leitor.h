@@ -130,6 +130,13 @@ template <class LogPolicy = LogPolicyStdout> class Leitor {
                     } else {
                         _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
                     }
+                } else {
+                    // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
+                    // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
+                    // DE SEQUÊNCIA"
+                    _estado = Dessincronizado;
+                    _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
+                    _status = ErroQuebraDeSequencia;
                 }
             }
             break;
