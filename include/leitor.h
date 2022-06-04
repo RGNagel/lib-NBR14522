@@ -103,7 +103,6 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                     // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
                     // DE SEQUÊNCIA"
                     _estado = Dessincronizado;
-                    _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
                     _status = ErroQuebraDeSequencia;
                 }
             }
@@ -135,7 +134,6 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                     // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
                     // DE SEQUÊNCIA"
                     _estado = Dessincronizado;
-                    _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
                     _status = ErroQuebraDeSequencia;
                 }
             }
@@ -226,7 +224,6 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                     // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
                     // DE SEQUÊNCIA"
                     _estado = Dessincronizado;
-                    _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
                     _status = ErroQuebraDeSequencia;
                 }
             }
