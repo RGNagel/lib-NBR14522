@@ -13,14 +13,12 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
         ComandoTransmitido,
         AtrasoDeSequenciaRecebido,
         CodigoRecebido,
-        RespostaCompostaParcialRecebida,
         AguardaNovoComando,
     } estado_t;
 
     typedef enum {
         Sucesso,
         Processando,
-        RespostaCompostaIncompleta,
         ErroLimiteDeNAKsRecebidos,
         ErroLimiteDeNAKsTransmitidos,
         ErroLimiteDeTransmissoesSemRespostas,
@@ -60,6 +58,8 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                 _counterNakRecebido = 0;
                 _counterNakTransmitido = 0;
                 _counterSemResposta = 0;
+                _counterWaitRecebido = 0;
+                _isRespostaComposta = false;
                 _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
                 _estado = ComandoTransmitido;
             }
@@ -67,14 +67,14 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
         case ComandoTransmitido:
             if (_timer.timedOut()) {
                 _counterSemResposta++;
-                if (_counterSemResposta < NBR14522::MAX_COMANDO_SEM_RESPOSTA) {
-                    _transmiteComando();
-                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                } else {
+                if (_counterSemResposta == NBR14522::MAX_COMANDO_SEM_RESPOSTA ||
+                    _isRespostaComposta) {
                     // falhou
                     _estado = AguardaNovoComando;
                     _status = ErroLimiteDeTransmissoesSemRespostas;
-                    _esvaziaPortaSerial();
+                } else {
+                    _transmiteComando();
+                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
                 }
             } else if (_porta->rx(&byte, 1)) {
                 // byte recebido
@@ -98,6 +98,14 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                     _respostaBytesLidos = 1;
                     _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
                     _estado = CodigoRecebido;
+                } else if (byte == NBR14522::ENQ && _isRespostaComposta) {
+                    // "se após o tempo permitido para a leitora enviar ACK este
+                    // ainda não foi enviado, o medidor deve enviar ENQ
+                    // aguardando o recebimento do ACK"
+
+                    // retransmite ACK
+                    byte = NBR14522::ACK;
+                    _porta->tx(&byte, 1);
                 } else {
                     // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
                     // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
@@ -112,7 +120,6 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                 // falhou
                 _estado = AguardaNovoComando;
                 _status = ErroTempoSemWaitEsgotado;
-                _esvaziaPortaSerial();
             } else if (_porta->rx(&byte, 1)) {
                 // byte recebido
                 if (byte == NBR14522::ENQ) {
@@ -125,7 +132,6 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                         // falhou
                         _estado = AguardaNovoComando;
                         _status = ErroLimiteDeWaitsRecebidos;
-                        _esvaziaPortaSerial();
                     } else {
                         _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
                     }
@@ -153,7 +159,6 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                     // falhou
                     _estado = AguardaNovoComando;
                     _status = ErroLimiteDeTransmissoesSemRespostas;
-                    _esvaziaPortaSerial();
                 } else {
                     _transmiteComando();
                     _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
@@ -166,19 +171,23 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                     // transmite ACK
                     byte = NBR14522::ACK;
                     _porta->tx(&byte, 1);
-                    // resetar contadores, pois são referentes a cada resposta
-                    _counterNakRecebido = 0;
-                    _counterNakTransmitido = 0;
-                    _counterSemResposta = 0;
-                    _counterWaitRecebido = 0;
                     if (_isComposto(_resposta.at(0))) {
-                        if (_isRespostaFinalDeComandoComposto(_resposta)) {
+                        _isRespostaComposta = true;
+                        if (_isUltimaRespostaDeComandoComposto(_resposta)) {
                             // resposta composta recebida por completo, sucesso
                             _estado = estado_t::AguardaNovoComando;
                             _status = Sucesso;
                         } else {
+                            // resetar contadores, pois são referentes a cada
+                            // resposta. Obs.: nao zera contador de NAK
+                            // recebidos pois o comando já foi recebido
+                            // corretamente pelo medidor e a partir de agora o
+                            // medidor nao deve enviar mais NAKs.
+                            _counterNakTransmitido = 0;
+                            _counterSemResposta = 0;
+                            _counterWaitRecebido = 0;
                             _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                            _estado = RespostaCompostaParcialRecebida;
+                            _estado = ComandoTransmitido;
                         }
                     } else {
                         // resposta simples recebido, sucesso
@@ -195,39 +204,12 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                         // falhou
                         _estado = estado_t::AguardaNovoComando;
                         _status = status_t::ErroLimiteDeNAKsTransmitidos;
-                        _esvaziaPortaSerial();
                     } else {
                         _estado = estado_t::ComandoTransmitido;
                         _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
                     }
                 }
             }
-            break;
-        case RespostaCompostaParcialRecebida:
-            if (_timer.timedOut()) {
-                // resposta composta parcialmente recebida
-                _estado = AguardaNovoComando;
-                _status = RespostaCompostaIncompleta;
-            } else if (_porta->rx(&byte, 1)) {
-                // byte recebido
-                if (byte == NBR14522::ENQ) {
-                    // resposta composta parcialmente recebida
-                    _estado = AguardaNovoComando;
-                    _status = RespostaCompostaIncompleta;
-                } else if (byte == _comando.at(0)) {
-                    // vai para a leitura da próxima resposta (composta)
-                    _estado = CodigoRecebido;
-                    _respostaBytesLidos = 1;
-                    _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
-                } else {
-                    // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
-                    // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
-                    // DE SEQUÊNCIA"
-                    _estado = Dessincronizado;
-                    _status = ErroQuebraDeSequencia;
-                }
-            }
-
             break;
         }
 
@@ -256,6 +238,7 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
     uint32_t _counterNakTransmitido = 0;
     uint32_t _counterSemResposta = 0;
     uint32_t _counterWaitRecebido = 0;
+    bool _isRespostaComposta = false;
 
     void _esvaziaPortaSerial() {
         byte_t byte;
@@ -274,7 +257,7 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
     }
 
     bool
-    _isRespostaFinalDeComandoComposto(const NBR14522::resposta_t& resposta) {
+    _isUltimaRespostaDeComandoComposto(const NBR14522::resposta_t& resposta) {
         return resposta.at(5) & 0x10;
     }
 };

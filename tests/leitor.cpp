@@ -255,12 +255,9 @@ TEST_CASE("Leitor") {
         }
         CHECK(porta->toMedidor.read() == ACK);
         CHECK(leitor.status() == Leitor::status_t::Processando);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.resposta() == rsp);
 
         // resposta intermediaria 2
@@ -276,12 +273,9 @@ TEST_CASE("Leitor") {
         }
         CHECK(porta->toMedidor.read() == ACK);
         CHECK(leitor.status() == Leitor::status_t::Processando);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.resposta() == rsp);
 
         // resposta intermediaria 3
@@ -297,12 +291,9 @@ TEST_CASE("Leitor") {
         }
         CHECK(porta->toMedidor.read() == ACK);
         CHECK(leitor.status() == Leitor::status_t::Processando);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
-        CHECK(leitor.processaEstado() ==
-              Leitor::estado_t::RespostaCompostaParcialRecebida);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.resposta() == rsp);
 
         // resposta final
