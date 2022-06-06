@@ -15,7 +15,8 @@ static void waitFor(unsigned int milliseconds) {
         ;
 }
 
-// porta serial fake para testes
+// porta serial simulada para testes que permite ler dados do leitor e add
+// dados como se fossemos o medidor
 
 class SerialPolicyDummy {
   public:
@@ -50,9 +51,7 @@ TEST_CASE("Leitor") {
 
     Leitor leitor(porta);
 
-    const byte_t enq = ENQ;
-    const byte_t nak = NAK;
-
+    // comando a ser transmitido pelo leitor
     comando_t cmd_transmitido, cmd_recebido_pelo_medidor;
     cmd_transmitido.fill(0xAA);
     cmd_transmitido.at(0) = 0x14;
@@ -66,8 +65,8 @@ TEST_CASE("Leitor") {
     CHECK(leitor.processaEstado() == Leitor::estado_t::Dessincronizado);
     CHECK(leitor.processaEstado() == Leitor::estado_t::Dessincronizado);
 
-    SUBCASE("Timed out TMAXENQ") {
-        porta->toLeitor.write(enq);
+    SUBCASE("alarme TMAXENQ excedido no estado Sincronizado") {
+        porta->toLeitor.write(ENQ);
         CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
         CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
         waitFor(TMAXENQ_MSEC);
@@ -75,10 +74,11 @@ TEST_CASE("Leitor") {
         CHECK(leitor.processaEstado() == Leitor::estado_t::Dessincronizado);
     }
 
-    SUBCASE("limite de transmissões sem respostas excedido") {
-        porta->toLeitor.write(enq);
+    SUBCASE("limite de transmissões sem respostas excedido (alarme TMAXRSP "
+            "excedido)") {
+        porta->toLeitor.write(ENQ);
         CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
@@ -89,8 +89,10 @@ TEST_CASE("Leitor") {
             for (size_t j = 0; j < COMANDO_SZ; j++)
                 cmd_recebido_pelo_medidor.at(j) = porta->toMedidor.read();
             CHECK(cmd_transmitido == cmd_recebido_pelo_medidor);
+
             // aguarda timeout TMAXRSP
             waitFor(TMAXRSP_MSEC);
+
             // processa e retransmite o comando
             CHECK(leitor.processaEstado() ==
                   Leitor::estado_t::ComandoTransmitido);
@@ -98,6 +100,7 @@ TEST_CASE("Leitor") {
                   Leitor::estado_t::ComandoTransmitido);
             CHECK(leitor.processaEstado() ==
                   Leitor::estado_t::ComandoTransmitido);
+
             // verifica estado e vars. após retransmissão
             CHECK(leitor.counterSemResposta() == i);
             CHECK(leitor.status() == Leitor::status_t::Processando);
@@ -112,7 +115,66 @@ TEST_CASE("Leitor") {
         // aguarda timeout TMAXRSP
         waitFor(TMAXRSP_MSEC);
 
-        // processa e nao retransmite comando, pois estourou o limite de
+        // processa e nao retransmite comando, pois excedeu o limite de
+        // retransmissões
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+
+        CHECK(leitor.status() ==
+              Leitor::status_t::ErroLimiteDeTransmissoesSemRespostas);
+    }
+
+    SUBCASE("alarme TMAXCAR excedido e nº de retransmissões excedida") {
+        porta->toLeitor.write(ENQ);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
+        porta->toLeitor.write(ENQ);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+
+        for (int i = 1; i < MAX_COMANDO_SEM_RESPOSTA; i++) {
+            // verifica que o comando foi enviado pelo leitor e está correto
+            REQUIRE(porta->toMedidor.toread() == COMANDO_SZ);
+            for (size_t j = 0; j < COMANDO_SZ; j++)
+                cmd_recebido_pelo_medidor.at(j) = porta->toMedidor.read();
+            CHECK(cmd_transmitido == cmd_recebido_pelo_medidor);
+
+            // envia primeiro byte (código) ao leitor
+            porta->toLeitor.write(cmd_transmitido.at(0));
+            CHECK(leitor.processaEstado() == Leitor::estado_t::CodigoRecebido);
+
+            // aguarda timeout TMAXCAR
+            waitFor(TMAXCAR_MSEC);
+
+            // processa e retransmite o comando
+            CHECK(leitor.processaEstado() ==
+                  Leitor::estado_t::ComandoTransmitido);
+            CHECK(leitor.processaEstado() ==
+                  Leitor::estado_t::ComandoTransmitido);
+            CHECK(leitor.processaEstado() ==
+                  Leitor::estado_t::ComandoTransmitido);
+
+            // verifica estado e vars. após retransmissão
+            CHECK(leitor.counterSemResposta() == i);
+            CHECK(leitor.status() == Leitor::status_t::Processando);
+        }
+
+        // ultima tentativa
+        // verifica que o comando foi enviado pelo leitor e está correto
+        REQUIRE(porta->toMedidor.toread() == COMANDO_SZ);
+        for (size_t j = 0; j < COMANDO_SZ; j++)
+            cmd_recebido_pelo_medidor.at(j) = porta->toMedidor.read();
+        CHECK(cmd_transmitido == cmd_recebido_pelo_medidor);
+
+        // envia primeiro byte (código) ao leitor
+        porta->toLeitor.write(cmd_transmitido.at(0));
+        CHECK(leitor.processaEstado() == Leitor::estado_t::CodigoRecebido);
+
+        // aguarda timeout TMAXCAR
+        waitFor(TMAXCAR_MSEC);
+
+        // processa e nao retransmite comando, pois excedeu o limite de
         // retransmissões
         CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
         CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
@@ -123,22 +185,22 @@ TEST_CASE("Leitor") {
     }
 
     SUBCASE("limite de NAKs recebidos excedido") {
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
         CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
 
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
 
         for (int i = 1; i < MAX_BLOCO_NAK; i++) {
-            porta->toLeitor.write(nak);
+            porta->toLeitor.write(NAK);
             CHECK(leitor.processaEstado() ==
                   Leitor::estado_t::ComandoTransmitido);
             CHECK(leitor.counterNakRecebido() == i);
         }
 
-        porta->toLeitor.write(nak);
+        porta->toLeitor.write(NAK);
 
         CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
         CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
@@ -149,9 +211,9 @@ TEST_CASE("Leitor") {
 
     SUBCASE("limite de NAKs transmitidos excedido (CRC das respostas sempre "
             "com erro)") {
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
         CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
 
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
@@ -194,9 +256,9 @@ TEST_CASE("Leitor") {
     }
 
     SUBCASE("Resposta simples válida recebida") {
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
         CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
 
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
@@ -228,14 +290,15 @@ TEST_CASE("Leitor") {
                CRC16(cmd_transmitido.data(), cmd_transmitido.size() - 2));
         leitor.setComando(cmd_transmitido);
 
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
         CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
-        porta->toLeitor.write(enq);
+        porta->toLeitor.write(ENQ);
 
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
 
+        // verifica comando transmitido pelo leitor
         REQUIRE(porta->toMedidor.toread() == COMANDO_SZ);
         for (size_t j = 0; j < COMANDO_SZ; j++)
             cmd_recebido_pelo_medidor.at(j) = porta->toMedidor.read();
@@ -314,6 +377,106 @@ TEST_CASE("Leitor") {
         CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
         CHECK(leitor.resposta() == rsp);
     }
+
+    SUBCASE("Resposta composta com retransmissão de ACK pelo leitor") {
+
+        cmd_transmitido.at(0) = 0x26; // composto
+
+        setCRC(cmd_transmitido,
+               CRC16(cmd_transmitido.data(), cmd_transmitido.size() - 2));
+        leitor.setComando(cmd_transmitido);
+
+        porta->toLeitor.write(ENQ);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
+        porta->toLeitor.write(ENQ);
+
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+
+        // verifica comando transmitido pelo leitor
+        REQUIRE(porta->toMedidor.toread() == COMANDO_SZ);
+        for (size_t j = 0; j < COMANDO_SZ; j++)
+            cmd_recebido_pelo_medidor.at(j) = porta->toMedidor.read();
+        CHECK(cmd_transmitido == cmd_recebido_pelo_medidor);
+
+        resposta_t rsp;
+
+        // resposta intermediaria 1
+
+        rsp.fill(0x00);
+        rsp.at(0) = 0x26;
+        setCRC(rsp, CRC16(rsp.data(), rsp.size() - 2));
+
+        for (size_t j = 0; j < RESPOSTA_SZ; j++) {
+            porta->toLeitor.write(rsp.at(j));
+            leitor.processaEstado();
+        }
+
+        CHECK(porta->toMedidor.read() == ACK);
+        CHECK(leitor.status() == Leitor::status_t::Processando);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+        CHECK(leitor.resposta() == rsp);
+
+        // medidor avisa o leitor que nao recebeu  o ultimo ACK
+        porta->toLeitor.write(ENQ);
+
+        // verifica que o leitor reenviou o ACK
+        CHECK(porta->toMedidor.read() == ACK);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+
+        // resposta final
+
+        rsp.fill(0x00);
+        rsp.at(0) = 0x26;
+        rsp.at(5) = 0x10; // indica que é resposta final
+        setCRC(rsp, CRC16(rsp.data(), rsp.size() - 2));
+
+        for (size_t j = 0; j < RESPOSTA_SZ; j++) {
+            porta->toLeitor.write(rsp.at(j));
+            leitor.processaEstado();
+        }
+        CHECK(porta->toMedidor.read() == ACK);
+        CHECK(leitor.status() == Leitor::status_t::Sucesso);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+        CHECK(leitor.resposta() == rsp);
+    }
+
+    SUBCASE("Recebimento de informacao de ocorrência no medidor") {
+        cmd_transmitido.at(0) = 0x26; // composto
+
+        // seta comando
+        setCRC(cmd_transmitido,
+               CRC16(cmd_transmitido.data(), cmd_transmitido.size() - 2));
+        leitor.setComando(cmd_transmitido);
+
+        porta->toLeitor.write(ENQ);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::Sincronizado);
+        porta->toLeitor.write(ENQ);
+
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
+
+        // verifica comando transmitido pelo leitor
+        REQUIRE(porta->toMedidor.toread() == COMANDO_SZ);
+        for (size_t j = 0; j < COMANDO_SZ; j++)
+            cmd_recebido_pelo_medidor.at(j) = porta->toMedidor.read();
+        CHECK(cmd_transmitido == cmd_recebido_pelo_medidor);
+
+        resposta_t rsp;
+
+        // medidor responde com a resposta "informacao de ocorrência no medidor"
+        // ao invés da resposta ao comando solicitado
+        rsp.at(0) = NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor;
+        setCRC(rsp, CRC16(rsp.data(), rsp.size() - 2));
+        for (size_t i = 0; i < RESPOSTA_SZ; i++) {
+            porta->toLeitor.write(rsp.at(i));
+            leitor.processaEstado();
+        }
+
+        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
+        CHECK(leitor.status() ==
+              Leitor::status_t::InformacaoDeOcorrenciaNoMedidor);
+    }
 }
 
 class TimerPolicyReduzTempoDeWAIT {
@@ -332,10 +495,9 @@ class TimerPolicyReduzTempoDeWAIT {
   private:
     moment _deadline;
 };
-
 const unsigned int TimerPolicyReduzTempoDeWAIT::TSEMWAIT_REDUZIDO_MSEC = 1000;
 
-TEST_CASE("Atraso de sequência (WAIT) com timer dummy") {
+TEST_CASE("Atraso de sequência (WAIT) com timer simulado") {
 
     sptr<SerialPolicyDummy> porta = std::make_shared<SerialPolicyDummy>();
 
@@ -343,6 +505,7 @@ TEST_CASE("Atraso de sequência (WAIT) com timer dummy") {
 
     Leitor leitor(porta);
 
+    // seta comando
     comando_t cmd_transmitido, cmd_recebido_pelo_medidor;
     cmd_transmitido.fill(0xAA);
     cmd_transmitido.at(0) = 0x14;
@@ -356,11 +519,13 @@ TEST_CASE("Atraso de sequência (WAIT) com timer dummy") {
     porta->toLeitor.write(ENQ);
     CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
 
+    // verifica que comando foi enviado corretamente pelo leitor
     CHECK(porta->toMedidor.toread() == COMANDO_SZ);
     for (size_t i = 0; i < COMANDO_SZ; i++)
         cmd_recebido_pelo_medidor.at(i) = porta->toMedidor.read();
     CHECK(cmd_transmitido == cmd_recebido_pelo_medidor);
 
+    // medidor solicita atraso de sequência
     porta->toLeitor.write(WAIT);
     CHECK(leitor.processaEstado() ==
           Leitor::estado_t::AtrasoDeSequenciaRecebido);
@@ -369,19 +534,20 @@ TEST_CASE("Atraso de sequência (WAIT) com timer dummy") {
         porta->toLeitor.write(ENQ);
         CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
 
+        // verifica que comando foi enviado corretamente pelo leitor
         CHECK(porta->toMedidor.toread() == COMANDO_SZ);
         for (size_t i = 0; i < COMANDO_SZ; i++)
             cmd_recebido_pelo_medidor.at(i) = porta->toMedidor.read();
         CHECK(cmd_transmitido == cmd_recebido_pelo_medidor);
     }
 
-    SUBCASE("com falha timeout TSEMWAIT") {
+    SUBCASE("com alarme TSEMWAIT excedido") {
         waitFor(TimerPolicyReduzTempoDeWAIT::TSEMWAIT_REDUZIDO_MSEC);
         CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
         CHECK(leitor.status() == leitor.ErroTempoSemWaitEsgotado);
     }
 
-    SUBCASE("com falha MAX_BLOCO_WAIT") {
+    SUBCASE("com alarme MAX_BLOCO_WAIT excedido") {
 
         for (int i = 1; i < MAX_BLOCO_WAIT; i++) {
             porta->toLeitor.write(WAIT);

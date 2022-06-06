@@ -1,6 +1,7 @@
 #pragma once
 #include <CRC.h>
 #include <NBR14522.h>
+#include <functional>
 #include <memory>
 
 template <typename T> using sptr = std::shared_ptr<T>;
@@ -25,6 +26,9 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
         ErroTempoSemWaitEsgotado,
         ErroLimiteDeWaitsRecebidos,
         ErroQuebraDeSequencia,
+        ErroAposRespostaRecebeNAK,
+        ErroSemRespostaAoAguardarProximaResposta,
+        InformacaoDeOcorrenciaNoMedidor,
     } status_t;
 
     void setComando(const NBR14522::comando_t& comando) {
@@ -33,6 +37,12 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
         _status = Processando;
         _esvaziaPortaSerial();
     }
+
+    void
+    setCallback(std::function<void(const NBR14522::resposta_t& rsp)> callback) {
+        _callback = callback;
+    }
+
     estado_t processaEstado() {
 
         byte_t byte;
@@ -67,11 +77,14 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
         case ComandoTransmitido:
             if (_timer.timedOut()) {
                 _counterSemResposta++;
-                if (_counterSemResposta == NBR14522::MAX_COMANDO_SEM_RESPOSTA ||
-                    _isRespostaComposta) {
+                if (_counterSemResposta == NBR14522::MAX_COMANDO_SEM_RESPOSTA) {
                     // falhou
                     _estado = AguardaNovoComando;
                     _status = ErroLimiteDeTransmissoesSemRespostas;
+                } else if (_isRespostaComposta) {
+                    // falhou
+                    _estado = AguardaNovoComando;
+                    _status = ErroSemRespostaAoAguardarProximaResposta;
                 } else {
                     _transmiteComando();
                     _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
@@ -81,7 +94,12 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                 if (byte == NBR14522::NAK) {
                     _counterNakRecebido++;
                     if (_counterNakRecebido == NBR14522::MAX_BLOCO_NAK) {
+                        // falha
                         _status = ErroLimiteDeNAKsRecebidos;
+                        _estado = AguardaNovoComando;
+                    } else if (_isRespostaComposta) {
+                        // falha
+                        _status = ErroAposRespostaRecebeNAK;
                         _estado = AguardaNovoComando;
                     } else {
                         _transmiteComando();
@@ -99,17 +117,17 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                     _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
                     _estado = CodigoRecebido;
                 } else if (byte == NBR14522::ENQ && _isRespostaComposta) {
-                    // "se após o tempo permitido para a leitora enviar ACK este
-                    // ainda não foi enviado, o medidor deve enviar ENQ
+                    // "se após o tempo permitido para a leitora enviar ACK
+                    // este ainda não foi enviado, o medidor deve enviar ENQ
                     // aguardando o recebimento do ACK"
 
                     // retransmite ACK
                     byte = NBR14522::ACK;
                     _porta->tx(&byte, 1);
                 } else {
-                    // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
-                    // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
-                    // DE SEQUÊNCIA"
+                    // "a recepção de algo que que não seja SINALIZADOR ou
+                    // BLOCO DE DADOS [resposta ou comando] deve provocar
+                    // uma QUEBRA DE SEQUÊNCIA"
                     _estado = Dessincronizado;
                     _status = ErroQuebraDeSequencia;
                 }
@@ -136,9 +154,9 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                         _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
                     }
                 } else {
-                    // "a recepção de algo que que não seja SINALIZADOR ou BLOCO
-                    // DE DADOS [resposta ou comando] deve provocar uma QUEBRA
-                    // DE SEQUÊNCIA"
+                    // "a recepção de algo que que não seja SINALIZADOR ou
+                    // BLOCO DE DADOS [resposta ou comando] deve provocar
+                    // uma QUEBRA DE SEQUÊNCIA"
                     _estado = Dessincronizado;
                     _status = ErroQuebraDeSequencia;
                 }
@@ -162,6 +180,7 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                 } else {
                     _transmiteComando();
                     _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                    _estado = ComandoTransmitido;
                 }
             } else if (_respostaBytesLidos >= NBR14522::RESPOSTA_SZ) {
                 // resposta completa recebida, verifica CRC
@@ -171,18 +190,24 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                     // transmite ACK
                     byte = NBR14522::ACK;
                     _porta->tx(&byte, 1);
+
+                    // chama callback caso tenha sido setado
+                    if (_callback)
+                        _callback(_resposta);
+
                     if (_isComposto(_resposta.at(0))) {
                         _isRespostaComposta = true;
                         if (_isUltimaRespostaDeComandoComposto(_resposta)) {
-                            // resposta composta recebida por completo, sucesso
+                            // resposta composta recebida por completo,
+                            // sucesso
                             _estado = estado_t::AguardaNovoComando;
                             _status = Sucesso;
                         } else {
-                            // resetar contadores, pois são referentes a cada
-                            // resposta. Obs.: nao zera contador de NAK
+                            // resetar contadores, pois são referentes a
+                            // cada resposta. Obs.: nao zera contador de NAK
                             // recebidos pois o comando já foi recebido
-                            // corretamente pelo medidor e a partir de agora o
-                            // medidor nao deve enviar mais NAKs.
+                            // corretamente pelo medidor e a partir de agora
+                            // o medidor nao deve enviar mais NAKs.
                             _counterNakTransmitido = 0;
                             _counterSemResposta = 0;
                             _counterWaitRecebido = 0;
@@ -190,9 +215,15 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                             _estado = ComandoTransmitido;
                         }
                     } else {
-                        // resposta simples recebido, sucesso
+                        // resposta simples recebida
+
+                        if (_resposta.at(0) ==
+                            NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor)
+                            _status = InformacaoDeOcorrenciaNoMedidor;
+                        else
+                            _status = Sucesso;
+
                         _estado = estado_t::AguardaNovoComando;
-                        _status = Sucesso;
                     }
                 } else {
                     // CRC incorreto
@@ -239,6 +270,7 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
     uint32_t _counterSemResposta = 0;
     uint32_t _counterWaitRecebido = 0;
     bool _isRespostaComposta = false;
+    std::function<void(const NBR14522::resposta_t& rsp)> _callback = nullptr;
 
     void _esvaziaPortaSerial() {
         byte_t byte;
