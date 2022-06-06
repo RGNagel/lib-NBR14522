@@ -1,7 +1,7 @@
 #include "doctest/doctest.h"
 #include <CRC.h>
 #include <NBR14522.h>
-#include <leitor.h>
+#include <leitor_fsm.h>
 #include <memory>
 #include <ring_buffer.h>
 #include <timer/timer_policy_win_unix.h>
@@ -47,7 +47,7 @@ TEST_CASE("Leitor") {
 
     sptr<SerialPolicyDummy> porta = std::make_shared<SerialPolicyDummy>();
 
-    using Leitor = Leitor<TimerPolicyWinUnix, SerialPolicyDummy>;
+    using Leitor = LeitorFSM<TimerPolicyWinUnix, SerialPolicyDummy>;
 
     Leitor leitor(porta);
 
@@ -501,7 +501,7 @@ TEST_CASE("Atraso de sequência (WAIT) com timer simulado") {
 
     sptr<SerialPolicyDummy> porta = std::make_shared<SerialPolicyDummy>();
 
-    using Leitor = Leitor<TimerPolicyReduzTempoDeWAIT, SerialPolicyDummy>;
+    using Leitor = LeitorFSM<TimerPolicyReduzTempoDeWAIT, SerialPolicyDummy>;
 
     Leitor leitor(porta);
 

@@ -1,6 +1,6 @@
 #include <NBR14522.h>
 #include <functional>
-#include <leitor_interface.h>
+#include <leitor.h>
 #include <serial/serial_policy_win_unix.h>
 #include <timer/timer_policy_win_unix.h>
 
@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    LeitorInterface<TimerPolicyWinUnix, SerialPolicyWinUnix> leitor(porta);
+    Leitor<TimerPolicyWinUnix, SerialPolicyWinUnix> leitor(porta);
 
     std::vector<comando_t> comandos;
     for (int i = 2; i < argc; i++) {

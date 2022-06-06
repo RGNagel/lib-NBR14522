@@ -1,295 +1,98 @@
 #pragma once
-#include <CRC.h>
-#include <NBR14522.h>
-#include <functional>
-#include <memory>
 
-template <typename T> using sptr = std::shared_ptr<T>;
+#include <functional>
+#include <leitor_fsm.h>
+#include <serial/serial_policy_win_unix.h>
+#include <timer/timer_policy_win_unix.h>
 
 template <class TimerPolicy, class SerialPolicy> class Leitor {
+
+    using FSM = LeitorFSM<TimerPolicy, SerialPolicy>;
+
   public:
-    typedef enum {
-        Dessincronizado,
-        Sincronizado,
-        ComandoTransmitido,
-        AtrasoDeSequenciaRecebido,
-        CodigoRecebido,
-        AguardaNovoComando,
-    } estado_t;
+    Leitor(sptr<SerialPolicy> porta) : _leitor(porta) {}
 
-    typedef enum {
-        Sucesso,
-        Processando,
-        ErroLimiteDeNAKsRecebidos,
-        ErroLimiteDeNAKsTransmitidos,
-        ErroLimiteDeTransmissoesSemRespostas,
-        ErroTempoSemWaitEsgotado,
-        ErroLimiteDeWaitsRecebidos,
-        ErroQuebraDeSequencia,
-        ErroAposRespostaRecebeNAK,
-        ErroSemRespostaAoAguardarProximaResposta,
-        InformacaoDeOcorrenciaNoMedidor,
-    } status_t;
+    bool leitura(NBR14522::comando_t& comando,
+                 std::function<void(const NBR14522::resposta_t& rsp)> callback,
+                 uint32_t timeout_resposta_ms = 0) {
 
-    void setComando(const NBR14522::comando_t& comando) {
-        _comando = comando;
-        _estado = Dessincronizado;
-        _status = Processando;
-        _esvaziaPortaSerial();
-    }
+        _leitor.setComando(comando);
+        _leitor.setCallback(callback);
 
-    void
-    setCallback(std::function<void(const NBR14522::resposta_t& rsp)> callback) {
-        _callback = callback;
-    }
+        TimerPolicy leituraDeadline;
+        if (timeout_resposta_ms)
+            leituraDeadline.setTimeout(timeout_resposta_ms);
 
-    estado_t processaEstado() {
+        _leitor.setCallback([&](const NBR14522::resposta_t& rsp) {
+            // reatualiza o timeout informado pelo usuário toda vez que uma
+            // resposta é recebida pelo leitor
+            if (timeout_resposta_ms)
+                leituraDeadline.setTimeout(timeout_resposta_ms);
 
-        byte_t byte;
-        size_t bytesLidosSz;
+            callback(rsp);
+        });
 
-        switch (_estado) {
-        case AguardaNovoComando:
-            // nao faz nada neste estado, aguardando comando ser setado em
-            // setComando()
-            break;
-        case Dessincronizado:
-            if (_porta->rx(&byte, 1) && byte == NBR14522::ENQ) {
-                _estado = Sincronizado;
-                _timer.setTimeout(NBR14522::TMAXENQ_MSEC);
-            }
-            break;
-        case Sincronizado:
-            if (_timer.timedOut()) {
-                _estado = Dessincronizado;
-                _esvaziaPortaSerial();
-            } else if (_porta->rx(&byte, 1) && byte == NBR14522::ENQ) {
-                _transmiteComando();
-                _counterNakRecebido = 0;
-                _counterNakTransmitido = 0;
-                _counterSemResposta = 0;
-                _counterWaitRecebido = 0;
-                _isRespostaComposta = false;
-                _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                _estado = ComandoTransmitido;
-            }
-            break;
-        case ComandoTransmitido:
-            if (_timer.timedOut()) {
-                _counterSemResposta++;
-                if (_counterSemResposta == NBR14522::MAX_COMANDO_SEM_RESPOSTA) {
-                    // falhou
-                    _estado = AguardaNovoComando;
-                    _status = ErroLimiteDeTransmissoesSemRespostas;
-                } else if (_isRespostaComposta) {
-                    // falhou
-                    _estado = AguardaNovoComando;
-                    _status = ErroSemRespostaAoAguardarProximaResposta;
+        while (true) {
+            switch (_leitor.processaEstado()) {
+            case FSM::estado_t::Dessincronizado:
+            case FSM::estado_t::Sincronizado:
+            case FSM::estado_t::ComandoTransmitido:
+            case FSM::estado_t::AtrasoDeSequenciaRecebido:
+            case FSM::estado_t::CodigoRecebido:
+                break;
+            case FSM::estado_t::AguardaNovoComando:
+                if (_leitor.status() == FSM::status_t::Sucesso) {
+                    return true;
                 } else {
-                    _transmiteComando();
-                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
+                    printf("%s\n", _status2verbose(_leitor.status()));
+                    return false;
                 }
-            } else if (_porta->rx(&byte, 1)) {
-                // byte recebido
-                if (byte == NBR14522::NAK) {
-                    _counterNakRecebido++;
-                    if (_counterNakRecebido == NBR14522::MAX_BLOCO_NAK) {
-                        // falha
-                        _status = ErroLimiteDeNAKsRecebidos;
-                        _estado = AguardaNovoComando;
-                    } else if (_isRespostaComposta) {
-                        // falha
-                        _status = ErroAposRespostaRecebeNAK;
-                        _estado = AguardaNovoComando;
-                    } else {
-                        _transmiteComando();
-                        _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                    }
-                } else if (byte == NBR14522::WAIT) {
-                    _estado = AtrasoDeSequenciaRecebido;
-                    _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
-                } else if (byte == _comando.at(0) ||
-                           byte == NBR14522::
-                                       CodigoInformacaoDeOcorrenciaNoMedidor) {
-                    // código do comando
-                    _resposta.at(0) = byte;
-                    _respostaBytesLidos = 1;
-                    _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
-                    _estado = CodigoRecebido;
-                } else if (byte == NBR14522::ENQ && _isRespostaComposta) {
-                    // "se após o tempo permitido para a leitora enviar ACK
-                    // este ainda não foi enviado, o medidor deve enviar ENQ
-                    // aguardando o recebimento do ACK"
-
-                    // retransmite ACK
-                    byte = NBR14522::ACK;
-                    _porta->tx(&byte, 1);
-                } else {
-                    // "a recepção de algo que que não seja SINALIZADOR ou
-                    // BLOCO DE DADOS [resposta ou comando] deve provocar
-                    // uma QUEBRA DE SEQUÊNCIA"
-                    _estado = Dessincronizado;
-                    _status = ErroQuebraDeSequencia;
-                }
+                break;
             }
-            break;
-        case AtrasoDeSequenciaRecebido:
-            if (_timer.timedOut()) {
-                // falhou
-                _estado = AguardaNovoComando;
-                _status = ErroTempoSemWaitEsgotado;
-            } else if (_porta->rx(&byte, 1)) {
-                // byte recebido
-                if (byte == NBR14522::ENQ) {
-                    _estado = ComandoTransmitido;
-                    _transmiteComando();
-                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                } else if (byte == NBR14522::WAIT) {
-                    _counterWaitRecebido++;
-                    if (_counterWaitRecebido == NBR14522::MAX_BLOCO_WAIT) {
-                        // falhou
-                        _estado = AguardaNovoComando;
-                        _status = ErroLimiteDeWaitsRecebidos;
-                    } else {
-                        _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
-                    }
-                } else {
-                    // "a recepção de algo que que não seja SINALIZADOR ou
-                    // BLOCO DE DADOS [resposta ou comando] deve provocar
-                    // uma QUEBRA DE SEQUÊNCIA"
-                    _estado = Dessincronizado;
-                    _status = ErroQuebraDeSequencia;
-                }
+
+            if (timeout_resposta_ms && leituraDeadline.timedOut()) {
+                printf("O processo de leitura excedeu o tempo informado pelo "
+                       "usuário (%i ms) sem receber nenhuma resposta\n",
+                       timeout_resposta_ms);
+                return false;
             }
-            break;
-        case CodigoRecebido:
-            bytesLidosSz =
-                _porta->rx(&_resposta[_respostaBytesLidos],
-                           NBR14522::RESPOSTA_SZ - _respostaBytesLidos);
-            _respostaBytesLidos += bytesLidosSz;
-
-            if (bytesLidosSz)
-                _timer.setTimeout(NBR14522::TMAXCAR_MSEC);
-
-            if (_timer.timedOut()) {
-                _counterSemResposta++;
-                if (_counterSemResposta == NBR14522::MAX_COMANDO_SEM_RESPOSTA) {
-                    // falhou
-                    _estado = AguardaNovoComando;
-                    _status = ErroLimiteDeTransmissoesSemRespostas;
-                } else {
-                    _transmiteComando();
-                    _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                    _estado = ComandoTransmitido;
-                }
-            } else if (_respostaBytesLidos >= NBR14522::RESPOSTA_SZ) {
-                // resposta completa recebida, verifica CRC
-                if (NBR14522::getCRC(_resposta) ==
-                    CRC16(_resposta.data(), _resposta.size() - 2)) {
-                    // CRC correto
-                    // transmite ACK
-                    byte = NBR14522::ACK;
-                    _porta->tx(&byte, 1);
-
-                    // chama callback caso tenha sido setado
-                    if (_callback)
-                        _callback(_resposta);
-
-                    if (_isComposto(_resposta.at(0))) {
-                        _isRespostaComposta = true;
-                        if (_isUltimaRespostaDeComandoComposto(_resposta)) {
-                            // resposta composta recebida por completo,
-                            // sucesso
-                            _estado = estado_t::AguardaNovoComando;
-                            _status = Sucesso;
-                        } else {
-                            // resetar contadores, pois são referentes a
-                            // cada resposta. Obs.: nao zera contador de NAK
-                            // recebidos pois o comando já foi recebido
-                            // corretamente pelo medidor e a partir de agora
-                            // o medidor nao deve enviar mais NAKs.
-                            _counterNakTransmitido = 0;
-                            _counterSemResposta = 0;
-                            _counterWaitRecebido = 0;
-                            _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                            _estado = ComandoTransmitido;
-                        }
-                    } else {
-                        // resposta simples recebida
-
-                        if (_resposta.at(0) ==
-                            NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor)
-                            _status = InformacaoDeOcorrenciaNoMedidor;
-                        else
-                            _status = Sucesso;
-
-                        _estado = estado_t::AguardaNovoComando;
-                    }
-                } else {
-                    // CRC incorreto
-                    // transmite NAK
-                    byte = NBR14522::NAK;
-                    _porta->tx(&byte, 1);
-                    _counterNakTransmitido++;
-                    if (_counterNakTransmitido == NBR14522::MAX_BLOCO_NAK) {
-                        // falhou
-                        _estado = estado_t::AguardaNovoComando;
-                        _status = status_t::ErroLimiteDeNAKsTransmitidos;
-                    } else {
-                        _estado = estado_t::ComandoTransmitido;
-                        _timer.setTimeout(NBR14522::TMAXRSP_MSEC);
-                    }
-                }
-            }
-            break;
         }
-
-        return _estado;
     }
-
-    Leitor(sptr<SerialPolicy> porta) : _porta(porta) {}
-
-    uint32_t counterNakRecebido() { return _counterNakRecebido; }
-    uint32_t counterNakTransmitido() { return _counterNakTransmitido; }
-    uint32_t counterSemResposta() { return _counterSemResposta; }
-    uint32_t counterWaitRecebido() { return _counterWaitRecebido; }
-    status_t status() { return _status; }
-
-    NBR14522::resposta_t resposta() { return _resposta; }
 
   private:
-    estado_t _estado = Dessincronizado;
-    status_t _status = Processando;
-    sptr<SerialPolicy> _porta;
-    TimerPolicy _timer;
-    NBR14522::comando_t _comando;
-    NBR14522::resposta_t _resposta;
-    size_t _respostaBytesLidos;
-    uint32_t _counterNakRecebido = 0;
-    uint32_t _counterNakTransmitido = 0;
-    uint32_t _counterSemResposta = 0;
-    uint32_t _counterWaitRecebido = 0;
-    bool _isRespostaComposta = false;
-    std::function<void(const NBR14522::resposta_t& rsp)> _callback = nullptr;
+    const char* _status2verbose(const typename FSM::status_t status) {
+        switch (status) {
+        case FSM::status_t::Sucesso:
+            return "Leitura realizada com sucesso";
+        case FSM::status_t::Processando:
+            return "Leitura em processamento";
+        case FSM::status_t::ErroLimiteDeNAKsRecebidos:
+            return "Erro: limite excedido de NAKs recebidos pelo leitor";
+        case FSM::status_t::ErroLimiteDeNAKsTransmitidos:
+            return "Erro: limite excedido de NAKs transmitidos pelo leitor";
+        case FSM::status_t::ErroLimiteDeTransmissoesSemRespostas:
+            return "Erro: limite excedido de transmissões sem resposta do "
+                   "medidor";
+        case FSM::status_t::ErroTempoSemWaitEsgotado:
+            return "Erro: limite de tempo excedido sem receber WAIT";
+        case FSM::status_t::ErroLimiteDeWaitsRecebidos:
+            return "Erro: limite excedido de WAITs recebidos";
+        case FSM::status_t::ErroQuebraDeSequencia:
+            return "Erro: quebra de sequência (byte diferente de sinalizador "
+                   "ou resposta) pelo medidor";
+        case FSM::status_t::ErroAposRespostaRecebeNAK:
+            return "Erro: NAK recebido mesmo após medidor já ter recebido "
+                   "comando íntegro";
+        case FSM::status_t::ErroSemRespostaAoAguardarProximaResposta:
+            return "Erro: Ao aguardar próxima resposta de um comando composto, "
+                   "leitor não recebe nada do medidor";
+        case FSM::status_t::InformacaoDeOcorrenciaNoMedidor:
+            return "Exceção: informação de ocorrência no medidor recebida no "
+                   "lugar da resposta ao comando solicitado";
+        }
 
-    void _esvaziaPortaSerial() {
-        byte_t byte;
-        while (_porta->rx(&byte, 1))
-            ;
+        return "";
     }
 
-    void _transmiteComando() {
-        // nao incluir os dois ultimos bytes de CRC no calculo do CRC
-        NBR14522::setCRC(_comando, CRC16(_comando.data(), _comando.size() - 2));
-        _porta->tx(_comando.data(), _comando.size());
-    }
-
-    bool _isComposto(const byte_t codigo) {
-        return codigo == 0x26 || codigo == 0x27 || codigo == 0x52;
-    }
-
-    bool
-    _isUltimaRespostaDeComandoComposto(const NBR14522::resposta_t& resposta) {
-        return resposta.at(5) & 0x10;
-    }
+    FSM _leitor;
 };
