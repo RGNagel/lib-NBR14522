@@ -25,9 +25,6 @@ TEST_CASE("Medidor Simulado") {
     std::thread t1(&Medidor::run, &medidor);
     std::this_thread::sleep_for(5ms);
 
-    std::array<byte_t, 258> data;
-    data.fill(0x00);
-
     comando_t cmd;
     resposta_t rsp;
 

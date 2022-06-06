@@ -6,7 +6,7 @@
 #include <iporta.h>
 #include <log_policy.h>
 #include <ring_buffer.h>
-#include <timer.h>
+#include <timer/timer.h>
 
 namespace Simulador {
 

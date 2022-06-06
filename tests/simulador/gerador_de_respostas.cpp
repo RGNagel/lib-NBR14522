@@ -9,7 +9,7 @@ using namespace NBR14522;
 void _CHECK_CRC(resposta_t& resposta);
 
 TEST_CASE("Gerador") {
-    GeradorDeRespostas gerador;
+    GeradorDeRespostas gerador(2, 2, 30);
 
     comando_t comando;
     resposta_t resposta;
@@ -26,7 +26,7 @@ TEST_CASE("Gerador") {
         comando.at(0) = 0x52;
 
         uint16_t qty = gerador.gerar(comando);
-        CHECK(qty > 1);
+        CHECK(qty == 30);
 
         for (uint16_t i = 0; i < qty; i++) {
             CHECK(gerador.getNextResposta(resposta));
