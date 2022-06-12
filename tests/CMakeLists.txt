@@ -13,12 +13,9 @@ set(TESTFILES
     timer.cpp
 )
 
-set(TEST_MAIN unit_tests)   # Default name for test executable (change if you wish).
+set(TEST_MAIN tests)   # Default name for test executable (change if you wish).
 set(TEST_RUNNER_PARAMS "")  # Any arguments to feed the test runner (change as needed).
 
-# --------------------------------------------------------------------------------
-#                         Make Tests (no change needed).
-# --------------------------------------------------------------------------------
 add_executable(${TEST_MAIN} ${TESTFILES})
 
 target_link_libraries(${TEST_MAIN} PRIVATE ${LIBRARY_NAME} doctest)
