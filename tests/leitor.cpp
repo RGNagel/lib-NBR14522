@@ -442,7 +442,7 @@ TEST_CASE("Leitor") {
         CHECK(leitor.resposta() == rsp);
     }
 
-    SUBCASE("Recebimento de informacao de ocorrência no medidor") {
+    SUBCASE("Recebimento de exceções") {
         cmd_transmitido.at(0) = 0x26; // composto
 
         // seta comando
@@ -464,18 +464,37 @@ TEST_CASE("Leitor") {
 
         resposta_t rsp;
 
-        // medidor responde com a resposta "informacao de ocorrência no medidor"
-        // ao invés da resposta ao comando solicitado
-        rsp.at(0) = NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor;
-        setCRC(rsp, CRC16(rsp.data(), rsp.size() - 2));
-        for (size_t i = 0; i < RESPOSTA_SZ; i++) {
-            porta->toLeitor.write(rsp.at(i));
-            leitor.processaEstado();
+        SUBCASE("informação de ocorrência no medidor") {
+            // medidor responde com a resposta "informacao de ocorrência no
+            // medidor" ao invés da resposta ao comando solicitado
+            rsp.at(0) = NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor;
+            setCRC(rsp, CRC16(rsp.data(), rsp.size() - 2));
+            for (size_t i = 0; i < RESPOSTA_SZ; i++) {
+                porta->toLeitor.write(rsp.at(i));
+                leitor.processaEstado();
+            }
+
+            CHECK(leitor.processaEstado() ==
+                  Leitor::estado_t::AguardaNovoComando);
+            CHECK(leitor.status() ==
+                  Leitor::status_t::ExcecaoOcorrenciaNoMedidor);
         }
 
-        CHECK(leitor.processaEstado() == Leitor::estado_t::AguardaNovoComando);
-        CHECK(leitor.status() ==
-              Leitor::status_t::InformacaoDeOcorrenciaNoMedidor);
+        SUBCASE("informacao de comando não implementado") {
+            // medidor responde com a resposta "informacao de comando não
+            // implementado" ao invés da resposta ao comando solicitado
+            rsp.at(0) = NBR14522::CodigoInformacaoDeComandoNaoImplementado;
+            setCRC(rsp, CRC16(rsp.data(), rsp.size() - 2));
+            for (size_t i = 0; i < RESPOSTA_SZ; i++) {
+                porta->toLeitor.write(rsp.at(i));
+                leitor.processaEstado();
+            }
+
+            CHECK(leitor.processaEstado() ==
+                  Leitor::estado_t::AguardaNovoComando);
+            CHECK(leitor.status() ==
+                  Leitor::status_t::ExcecaoComandoNaoImplementado);
+        }
     }
 }
 

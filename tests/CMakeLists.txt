@@ -13,7 +13,7 @@ set(TESTFILES
     timer.cpp
 )
 
-set(TEST_MAIN tests)   # Default name for test executable (change if you wish).
+set(TEST_MAIN testes-unitarios-exe)   # Default name for test executable (change if you wish).
 set(TEST_RUNNER_PARAMS "")  # Any arguments to feed the test runner (change as needed).
 
 add_executable(${TEST_MAIN} ${TESTFILES})

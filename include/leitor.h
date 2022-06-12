@@ -86,9 +86,12 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
         case FSM::status_t::ErroSemRespostaAoAguardarProximaResposta:
             return "Erro: Ao aguardar próxima resposta de um comando composto, "
                    "leitor não recebe nada do medidor";
-        case FSM::status_t::InformacaoDeOcorrenciaNoMedidor:
+        case FSM::status_t::ExcecaoOcorrenciaNoMedidor:
             return "Exceção: informação de ocorrência no medidor recebida no "
                    "lugar da resposta ao comando solicitado";
+        case FSM::status_t::ExcecaoComandoNaoImplementado:
+            return "Exceção: comando solicitado ao medidor não foi "
+                   "implementado";
         }
 
         return "";

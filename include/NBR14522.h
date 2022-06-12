@@ -250,6 +250,7 @@ enum Regra {
     TSEMWAIT_SEC = 305,
 };
 
+constexpr byte_t CodigoInformacaoDeComandoNaoImplementado = 0x39;
 constexpr byte_t CodigoInformacaoDeOcorrenciaNoMedidor = 0x40;
 
 } // namespace NBR14522

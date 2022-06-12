@@ -28,7 +28,8 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
         ErroQuebraDeSequencia,
         ErroAposRespostaRecebeNAK,
         ErroSemRespostaAoAguardarProximaResposta,
-        InformacaoDeOcorrenciaNoMedidor,
+        ExcecaoOcorrenciaNoMedidor,
+        ExcecaoComandoNaoImplementado
     } status_t;
 
     void setComando(const NBR14522::comando_t& comando) {
@@ -108,9 +109,11 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
                 } else if (byte == NBR14522::WAIT) {
                     _estado = AtrasoDeSequenciaRecebido;
                     _timer.setTimeout(NBR14522::TSEMWAIT_SEC * 1000);
-                } else if (byte == _comando.at(0) ||
-                           byte == NBR14522::
-                                       CodigoInformacaoDeOcorrenciaNoMedidor) {
+                } else if (
+                    byte == _comando.at(0) ||
+                    byte == NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor ||
+                    byte ==
+                        NBR14522::CodigoInformacaoDeComandoNaoImplementado) {
                     // código do comando
                     _resposta.at(0) = byte;
                     _respostaBytesLidos = 1;
@@ -219,7 +222,11 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
 
                         if (_resposta.at(0) ==
                             NBR14522::CodigoInformacaoDeOcorrenciaNoMedidor)
-                            _status = InformacaoDeOcorrenciaNoMedidor;
+                            _status = ExcecaoOcorrenciaNoMedidor;
+                        else if (_resposta.at(0) ==
+                                 NBR14522::
+                                     CodigoInformacaoDeComandoNaoImplementado)
+                            _status = ExcecaoComandoNaoImplementado;
                         else
                             _status = Sucesso;
 
