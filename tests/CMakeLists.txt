@@ -13,7 +13,7 @@ set(TESTFILES
     timer.cpp
 )
 
-set(TEST_MAIN testes-unitarios-exe)   # Default name for test executable (change if you wish).
+set(TEST_MAIN testes-unitarios)
 set(TEST_RUNNER_PARAMS "")  # Any arguments to feed the test runner (change as needed).
 
 add_executable(${TEST_MAIN} ${TESTFILES})
@@ -23,8 +23,8 @@ set_target_properties(${TEST_MAIN} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT
 target_set_warnings(${TEST_MAIN} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
 
 set_target_properties(${TEST_MAIN} PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED YES
+    CXX_STANDARD 14
+    CXX_STANDARD_REQUIRED NO
     CXX_EXTENSIONS NO
 )
 
