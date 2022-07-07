@@ -2,10 +2,13 @@
 
 #include <functional>
 #include <leitor_fsm.h>
+#include <log_policy.h>
 #include <serial/serial_policy_win_unix.h>
 #include <timer/timer_policy_win_unix.h>
 
-template <class TimerPolicy, class SerialPolicy> class Leitor {
+template <class TimerPolicy, class SerialPolicy,
+          class LogPolicy = LogPolicyStdout>
+class Leitor {
 
     using FSM = LeitorFSM<TimerPolicy, SerialPolicy>;
 
@@ -33,7 +36,9 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
         });
 
         while (true) {
-            switch (_leitor.processaEstado()) {
+            typename FSM::estado_t estado = _leitor.processaEstado();
+
+            switch (estado) {
             case FSM::estado_t::Dessincronizado:
             case FSM::estado_t::Sincronizado:
             case FSM::estado_t::ComandoTransmitido:
@@ -44,22 +49,42 @@ template <class TimerPolicy, class SerialPolicy> class Leitor {
                 if (_leitor.status() == FSM::status_t::Sucesso) {
                     return true;
                 } else {
-                    printf("%s\n", _status2verbose(_leitor.status()));
+                    LogPolicy::log("Processo falhou. Status: %s\n",
+                                   _status2verbose(_leitor.status()));
                     return false;
                 }
                 break;
             }
 
             if (timeout_resposta_ms && leituraDeadline.timedOut()) {
-                printf("O processo de leitura excedeu o tempo informado pelo "
-                       "usuário (%i ms) sem receber nenhuma resposta\n",
-                       timeout_resposta_ms);
+                LogPolicy::log(
+                    "O processo de leitura excedeu o tempo informado pelo "
+                    "usuário (%i ms) sem receber nenhuma resposta. Estado: "
+                    "%s\n",
+                    timeout_resposta_ms, _estado2string(estado));
                 return false;
             }
         }
     }
 
   private:
+    const char* _estado2string(const typename FSM::estado_t estado) {
+        switch (estado) {
+        case FSM::estado_t::Dessincronizado:
+            return "Dessincronizado";
+        case FSM::estado_t::Sincronizado:
+            return "Sincronizado";
+        case FSM::estado_t::ComandoTransmitido:
+            return "Comando Transmitido";
+        case FSM::estado_t::AtrasoDeSequenciaRecebido:
+            return "Atraso de Sequência Recebido";
+        case FSM::estado_t::CodigoRecebido:
+            return "Código Recebido";
+        case FSM::estado_t::AguardaNovoComando:
+            return "Aguarda Novo Comando";
+        }
+        return "";
+    }
     const char* _status2verbose(const typename FSM::status_t status) {
         switch (status) {
         case FSM::status_t::Sucesso:
