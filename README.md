@@ -1,100 +1,47 @@
-[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active)
-[![Build Status](https://travis-ci.org/bsamseth/cpp-project.svg?branch=master)](https://travis-ci.org/bsamseth/cpp-project)
-[![Build status](https://ci.appveyor.com/api/projects/status/g9bh9kjl6ocvsvse/branch/master?svg=true)](https://ci.appveyor.com/project/bsamseth/cpp-project/branch/master)
-[![Coverage Status](https://coveralls.io/repos/github/bsamseth/cpp-project/badge.svg?branch=master)](https://coveralls.io/github/bsamseth/cpp-project?branch=master)
-[![codecov](https://codecov.io/gh/bsamseth/cpp-project/branch/master/graph/badge.svg)](https://codecov.io/gh/bsamseth/cpp-project)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/eb004322b0d146239a57eb242078e179)](https://www.codacy.com/app/bsamseth/cpp-project?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=bsamseth/cpp-project&amp;utm_campaign=Badge_Grade)
-[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/bsamseth/cpp-project.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/bsamseth/cpp-project/context:cpp)
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/bsamseth/cpp-project.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/bsamseth/cpp-project/alerts/)
-[![license](https://img.shields.io/badge/license-Unlicense-blue.svg)](https://github.com/bsamseth/cpp-project/blob/master/LICENSE)
-[![Lines of Code](https://tokei.rs/b1/github/bsamseth/cpp-project)](https://github.com/Aaronepower/tokei)
-[![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/bsamseth/cpp-project.svg)](http://isitmaintained.com/project/bsamseth/cpp-project "Average time to resolve an issue")
-[![Percentage of issues still open](http://isitmaintained.com/badge/open/bsamseth/cpp-project.svg)](http://isitmaintained.com/project/bsamseth/cpp-project "Percentage of issues still open")
+# Biblioteca NBR14522
 
-# Boiler plate for C++ projects
+Este repositório implementa a comunicação convencional leitor-medidor contida na
+norma ABNT NBR 14522 do ponto de vista do leitor.
 
-This is a boiler plate for C++ projects. What you get:
+O propósito desta biblioteca é fornecer uma implementação portável e compatível
+com sistemas embarcados e microcontrolados bem como com qualquer outro sistema
+de propósito geral.
 
--   Sources, headers and mains separated in distinct folders
--   Use of modern [CMake](https://cmake.org/) for much easier compiling
--   Setup for tests using [doctest](https://github.com/onqtam/doctest)
--   Continuous testing with [Travis-CI](https://travis-ci.org/), [Appveyor](https://www.appveyor.com) and [GitHub Actions](https://github.com/features/actions), with support for C++17.
--   Code coverage reports, including automatic upload to [Coveralls.io](https://coveralls.io/) and/or [Codecov.io](https://codecov.io)
--   Code documentation with [Doxygen](http://www.stack.nl/~dimitri/doxygen/)
+A classe genérica **LeitorFSM** implementa o leitor da comunicação convencional.
+Tal classe tem duas dependências (ou policies):
 
-![Demo of usage](https://i.imgur.com/foymVfy.gif)
+1. **TimerPolicy**: interface que define verificação de alarmes/timeout
+2. **SerialPolicy**: interface que define transmissão e recepção de dados de uma
+   porta serial (ou qualquer outra porta, desde que respeite essa interface)
 
-## Structure
-``` text
-.
-├── CMakeLists.txt
-├── app
-│   └── main.cpp
-├── include
-│   ├── example.h
-│   └── exampleConfig.h.in
-├── src
-│   └── example.cpp
-└── tests
-    ├── dummy.cpp
-    └── main.cpp
-```
+Assim, para extender essa biblioteca para outros microcontroladores, ambientes
+e/ou sistemas, deve-se implementar as duas dependências/policies e passá-la como
+parâmetro à classe genérica **LeitorFSM**. Novas policies de timer e serial
+podem ser adicionadas às pastas `{include,src}/{serial,timer}/` e aplicações à
+pasta `app/`. Respectivos ajustes ao arquivo `CMakeLists.txt` serão necessários
+para compilar a nova aplicação. Além disso, sugere-se adicionar um arquivo de
+toolchain do cmake na pasta `cmake/` para compilar para outra plataforma. O
+arquivo `cmake/TC-raspberry.cmake` contém um exemplo funcional e testado de
+toolchain (Leia os comentários do arquivo `cmake/TC-raspberry.cmake` para
+orientações sobre arquivos toolchains do cmake).
 
-Sources go in [src/](src/), header files in [include/](include/), main programs in [app/](app), and
-tests go in [tests/](tests/) (compiled to `unit_tests` by default).
+Atualmente o repositório contém somente policies para aplicações Windows e
+Unix-like. Veja a aplicação `app/leitor-cli` para um exemplo funcional e testado
+em um Raspberry.
 
-If you add a new executable, say `app/hello.cpp`, you only need to add the following two lines to [CMakeLists.txt](CMakeLists.txt):
+# Como compilar
 
-``` cmake
-add_executable(main app/main.cpp)   # Name of exec. and location of file.
-target_link_libraries(main PRIVATE ${LIBRARY_NAME})  # Link the executable to lib built from src/*.cpp (if it uses it).
-```
+# Como testar
 
-You can find the example source code that builds the `main` executable in [app/main.cpp](app/main.cpp) under the `Build` section in [CMakeLists.txt](CMakeLists.txt).
-If the executable you made does not use the library in [src/](src), then only the first line is needed.
+# Outros repositórios e/ou projetos
 
+A estrutura e organização de arquivos e do sistema de compilação CMake foram
+baseados no repositório https://github.com/bsamseth/cpp-project
 
+Os arquivos `src/serial/win_unix/serialib.cpp` e `include/serial/serialib.h`
+foram pegos do repositório https://github.com/imabot2/serialib para a leitura da
+porta serial no Windows e Unix-like.
 
-## Building
+# Licença
 
-Build by making a build directory (i.e. `build/`), run `cmake` in that dir, and then use `make` to build the desired target.
-
-Example:
-
-``` bash
-> mkdir build && cd build
-> cmake .. -DCMAKE_BUILD_TYPE=[Debug | Coverage | Release]
-> make
-> ./main
-> make test      # Makes and runs the tests.
-> make coverage  # Generate a coverage report.
-> make doc       # Generate html documentation.
-```
-
-## .gitignore
-
-The [.gitignore](.gitignore) file is a copy of the [Github C++.gitignore file](https://github.com/github/gitignore/blob/master/C%2B%2B.gitignore),
-with the addition of ignoring the build directory (`build/`).
-
-## Services
-
-If the repository is activated with Travis-CI, then unit tests will be built and executed on each commit.
-The same is true if the repository is activated with Appveyor.
-
-If the repository is activated with Coveralls/Codecov, then deployment to Travis will also calculate code coverage and
-upload this to Coveralls.io and/or Codecov.io
-
-## Setup
-
-### Using the GitHub template
-Click the `Use this template` button to make a new repository from this template.
-
-### From command line
-When starting a new project, you probably don't want the history of this repository. To start fresh you can use
-the [setup script](setup.sh) as follows:
-``` bash
-> git clone https://github.com/bsamseth/cpp-project  # Or use ssh-link if you like.
-> cd cpp-project
-> bash setup.sh
-```
-The result is a fresh Git repository with one commit adding all files from the boiler plate.
+Veja o arquivo `LICENSE`.
