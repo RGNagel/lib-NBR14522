@@ -77,6 +77,7 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
             break;
         case ComandoTransmitido:
             if (_timer.timedOut()) {
+                _esvaziaPortaSerial();
                 _counterSemResposta++;
                 if (_counterSemResposta == NBR14522::MAX_COMANDO_SEM_RESPOSTA) {
                     // falhou
@@ -133,6 +134,7 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
                     // uma QUEBRA DE SEQUÊNCIA"
                     _estado = Dessincronizado;
                     _status = ErroQuebraDeSequencia;
+                    _esvaziaPortaSerial();
                 }
             }
             break;
@@ -162,6 +164,7 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
                     // uma QUEBRA DE SEQUÊNCIA"
                     _estado = Dessincronizado;
                     _status = ErroQuebraDeSequencia;
+                    _esvaziaPortaSerial();
                 }
             }
             break;
@@ -176,6 +179,7 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
 
             if (_timer.timedOut()) {
                 _counterSemResposta++;
+                _esvaziaPortaSerial();
                 if (_counterSemResposta == NBR14522::MAX_COMANDO_SEM_RESPOSTA) {
                     // falhou
                     _estado = AguardaNovoComando;
@@ -265,7 +269,7 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
     NBR14522::resposta_t resposta() { return _resposta; }
 
   private:
-    estado_t _estado = Dessincronizado;
+    estado_t _estado = AguardaNovoComando;
     status_t _status = Processando;
     sptr<SerialPolicy> _porta;
     TimerPolicy _timer;
@@ -280,8 +284,8 @@ template <class TimerPolicy, class SerialPolicy> class LeitorFSM {
     std::function<void(const NBR14522::resposta_t& rsp)> _callback = nullptr;
 
     void _esvaziaPortaSerial() {
-        byte_t byte;
-        while (_porta->rx(&byte, 1))
+        byte_t buf[32];
+        while (_porta->rx(buf, sizeof(buf)))
             ;
     }
 

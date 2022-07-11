@@ -3,8 +3,6 @@
 #include <functional>
 #include <leitor_fsm.h>
 #include <log_policy.h>
-#include <serial/serial_policy_win_unix.h>
-#include <timer/timer_policy_win_unix.h>
 
 template <class TimerPolicy, class SerialPolicy,
           class LogPolicy = LogPolicyStdout>
@@ -60,8 +58,9 @@ class Leitor {
                 LogPolicy::log(
                     "O processo de leitura excedeu o tempo informado pelo "
                     "usuário (%i ms) sem receber nenhuma resposta. Estado: "
-                    "%s\n",
-                    timeout_resposta_ms, _estado2string(estado));
+                    "%s\n, Status: %s",
+                    timeout_resposta_ms, _estado2string(estado),
+                    _status2verbose(_leitor.status()));
                 return false;
             }
         }
