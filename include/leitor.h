@@ -37,20 +37,19 @@ class Leitor {
             typename FSM::estado_t estado = _leitor.processaEstado();
 
             switch (estado) {
-            case FSM::estado_t::Dessincronizado:
-            case FSM::estado_t::Sincronizado:
-            case FSM::estado_t::ComandoTransmitido:
-            case FSM::estado_t::AtrasoDeSequenciaRecebido:
-            case FSM::estado_t::CodigoRecebido:
-                break;
             case FSM::estado_t::AguardaNovoComando:
-                if (_leitor.status() == FSM::status_t::Sucesso) {
+                switch (_leitor.status()) {
+                case FSM::status_t::Sucesso:
                     return true;
-                } else {
+                case FSM::status_t::Processando:
+                    break;
+                default:
                     LogPolicy::log("Processo falhou. Status: %s\n",
                                    _status2verbose(_leitor.status()));
                     return false;
                 }
+                break;
+            default:
                 break;
             }
 
