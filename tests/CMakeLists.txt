@@ -6,9 +6,6 @@ set(TESTFILES
     ring_buffer.cpp
     CRC.cpp
     leitor.cpp
-    # leitor_com_medidor_simulado.cpp
-    # simulador/medidor.cpp
-    # simulador/gerador_de_respostas.cpp
     BCD.cpp
     timer.cpp
 )

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "serialib.h"
-#include <porta_serial/porta_serial.h>
 
 class SerialPolicyWinUnix {
   public:
