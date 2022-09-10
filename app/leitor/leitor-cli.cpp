@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
     std::shared_ptr<SerialPolicyWinUnix> porta =
         std::make_shared<SerialPolicyWinUnix>();
 
-    if (!porta->open(argv[1], 9600)) {
+    if (!porta->openSerial(argv[1])) {
         printf("Não foi possível abrir a porta serial\n\n");
         return EXIT_FAILURE;
     }
@@ -94,6 +94,6 @@ int main(int argc, char* argv[]) {
 
     printf("\n");
 
-    porta->close();
+    porta->closeSerial();
     return EXIT_SUCCESS;
 }
