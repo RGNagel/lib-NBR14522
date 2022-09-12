@@ -1,7 +1,7 @@
 #include <chrono>
 #include <doctest/doctest.h>
 #include <thread>
-#include <timer/timer_policy_win_unix.h>
+#include <timer/timer_policy_generic_os.h>
 
 using namespace std::literals;
 

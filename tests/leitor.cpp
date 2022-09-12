@@ -4,7 +4,7 @@
 #include <leitor_fsm.h>
 #include <memory>
 #include <ring_buffer.h>
-#include <timer/timer_policy_win_unix.h>
+#include <timer/timer_policy_generic_os.h>
 
 using namespace NBR14522;
 

@@ -5,7 +5,7 @@
 #include <functional>
 #include <leitor.h>
 #include <serial/serial_policy_generic_os.h>
-#include <timer/timer_policy_win_unix.h>
+#include <timer/timer_policy_generic_os.h>
 
 using namespace NBR14522;
 
