@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-find ./src ./include ./app ./tests \
+find ./src ./include ./apps ./tests \
 -type f \
 -regextype egrep -regex ".*.(c|cpp|h|hpp)" \
 -exec clang-format -i {} \;

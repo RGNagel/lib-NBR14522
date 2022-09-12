@@ -1,7 +1,10 @@
+// this is a command-line application for reading NBR14522 compatible meter.
+// Read usage below.
+
 #include <NBR14522.h>
 #include <functional>
 #include <leitor.h>
-#include <serial/serial_policy_win_unix.h>
+#include <serial/serial_policy_generic_os.h>
 #include <timer/timer_policy_win_unix.h>
 
 using namespace NBR14522;
@@ -58,15 +61,15 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    std::shared_ptr<SerialPolicyWinUnix> porta =
-        std::make_shared<SerialPolicyWinUnix>();
+    std::shared_ptr<SerialPolicyGenericOS> porta =
+        std::make_shared<SerialPolicyGenericOS>();
 
     if (!porta->openSerial(argv[1])) {
         printf("Não foi possível abrir a porta serial\n\n");
         return EXIT_FAILURE;
     }
 
-    Leitor<TimerPolicyWinUnix, SerialPolicyWinUnix> leitor(porta);
+    Leitor<TimerPolicyWinUnix, SerialPolicyGenericOS> leitor(porta);
 
     std::vector<comando_t> comandos;
     for (int i = 2; i < argc; i++) {

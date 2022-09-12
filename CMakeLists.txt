@@ -39,12 +39,6 @@ find_lto(CXX)
 #                         Locate files (change as needed).
 # --------------------------------------------------------------------------------
 
-# platform-specific sources
-
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux" OR ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
-    set(SOURCE_PORTA_SERIAL src/serial/win_unix/serialib.cpp)
-endif()
-
 set(SOURCES_LIBRARY
     src/CRC.cpp
 )
@@ -73,25 +67,14 @@ target_set_warnings(${LIBRARY_NAME} ENABLE ALL ALL DISABLE Annoying)
 # target_set_warnings(main ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
 # target_enable_lto(main optimized)  # enable link-time-optimization if available for non-debug configurations
 
-################
-# leitor CLI app 
-################
-
-set(LEITOR leitor-cli)
-add_executable(${LEITOR} app/leitor/leitor-cli.cpp ${SOURCE_PORTA_SERIAL})
-target_link_libraries(${LEITOR} PRIVATE ${LIBRARY_NAME})
-target_set_warnings(${LEITOR} ENABLE ALL ALL DISABLE Annoying) # Set warnings (if needed).
-target_enable_lto(${LEITOR} optimized)  # enable link-time-optimization if available for non-debug configurations
-
-# Set the properties you require, e.g. what C++ standard to use. Here applied to library and main (change as needed).
 set_target_properties(
-    ${LIBRARY_NAME} ${LEITOR}
+    ${LIBRARY_NAME}
       PROPERTIES
         CXX_STANDARD 14
         CXX_STANDARD_REQUIRED NO
         CXX_EXTENSIONS NO
 )
 
-# Set up tests (see tests/CMakeLists.txt).
+add_subdirectory(apps)
 add_subdirectory(tests)
 
