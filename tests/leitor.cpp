@@ -418,6 +418,7 @@ TEST_CASE("Leitor") {
 
         // medidor avisa o leitor que nao recebeu  o ultimo ACK
         porta->toLeitor.write(ENQ);
+        CHECK(leitor.processaEstado() == Leitor::estado_t::ComandoTransmitido);
 
         // verifica que o leitor reenviou o ACK
         CHECK(porta->toMedidor.read() == ACK);
