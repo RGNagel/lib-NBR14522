@@ -1,6 +1,7 @@
 // this is a command-line application for reading NBR14522 compatible meter.
 // Read usage below.
 
+#include <vector>
 #include <NBR14522.h>
 #include <functional>
 #include <leitor.h>
