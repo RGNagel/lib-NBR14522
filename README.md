@@ -31,6 +31,21 @@ em um Raspberry.
 
 # Como compilar
 
+Primeiramente é necessário ter o cmake instalado. Então, uma vez dentro do 
+repositório do projeto, execute:
+
+'''
+mkdir build
+cd build
+cmake ..
+make
+'''
+
+Se não houver nenhum erro, os arquivos compilados estarão na pasta build. 
+Por exemplo, o binário da aplicação leitor-cli estará em 
+build/apps/leitor-cli/leitor-cli (obs.: execute o binário leitor-cli para mais 
+informações em como usar a aplicação.)
+
 # Como testar
 
 # Outros repositórios e/ou projetos
