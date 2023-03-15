@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <cstddef> // size_t
+#include <cstdint> // uint16_t, etc.
 
 typedef unsigned char byte_t;
 
