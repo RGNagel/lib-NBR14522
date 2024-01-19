@@ -7,6 +7,7 @@
 #include <leitor.h>
 #include <serial/serial_policy_generic_os.h>
 #include <timer/timer_policy_generic_os.h>
+#include <hexstr2bytes.h>
 
 using namespace NBR14522;
 
@@ -39,22 +40,6 @@ void print_usage() {
         "./leitor-cli /dev/ttyUSB0 204455660101\n\n");
 }
 
-std::vector<byte_t> get_hex_bytes(const std::string& hexbytes) {
-    std::vector<byte_t> retval;
-
-    // should not be odd length
-    if (hexbytes.size() & 1)
-        return retval;
-
-    for (size_t i = 0; i < hexbytes.size(); i += 2) {
-        std::string hexbyte = hexbytes.substr(i, 2);
-        auto byte = strtol(hexbyte.c_str(), nullptr, 16);
-        retval.push_back(static_cast<byte_t>(byte));
-    }
-
-    return retval;
-}
-
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         printf("Número de argumentos inválido.\n\n");
@@ -74,7 +59,7 @@ int main(int argc, char* argv[]) {
 
     std::vector<comando_t> comandos;
     for (int i = 2; i < argc; i++) {
-        auto bytes = get_hex_bytes(argv[i]);
+        auto bytes = hexstr2bytes(argv[i]);
         comando_t cmd;
         cmd.fill(0x00);
         std::copy(bytes.begin(), bytes.end(), cmd.begin());
