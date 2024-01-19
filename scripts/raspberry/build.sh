@@ -20,7 +20,9 @@ cd build-raspberry
 cmake \
     -DTC_BIN_PATH=${TC_BIN_PATH} \
     -DTC_ENV_PATH=${TC_ENV_PATH} \
-    -DCMAKE_TOOLCHAIN_FILE=../cmake/TC-raspberry.cmake ..
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_TOOLCHAIN_FILE=../cmake/TC-raspberry.cmake .. \
+
 make
 cd -
 

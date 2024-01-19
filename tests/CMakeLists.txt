@@ -8,6 +8,7 @@ set(TESTFILES
     leitor.cpp
     BCD.cpp
     timer.cpp
+    get_comandos_from_data.cpp
 )
 
 set(TEST_MAIN testes-unitarios)
