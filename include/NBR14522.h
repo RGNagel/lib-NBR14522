@@ -42,17 +42,14 @@ inline medidor_num_serie_t getNumSerieMedidor(resposta_t& resposta) {
 }
 
 inline bool isValidCodeCommand(byte_t code) {
-    // TODO: realizar verificação em O(1) (lookup table?)
+    // according to the NBR14522, a valid command is any BCD value between 01
+    // and 99, except 05, 06, 10 and 15
 
-    static const byte_t codes[] = {0x14, 0x20, 0x21, 0x22, 0x51, 0x23, 0x24,
-                                   0x41, 0x44, 0x42, 0x43, 0x45, 0x46, 0x25,
-                                   0x26, 0x27, 0x52, 0x28, 0x80};
-
-    for (size_t i = 0; i < sizeof(codes); i++)
-        if (code == codes[i])
-            return true;
-
-    return false;
+    if ((code & 0xF0) > 0x90 || (code & 0x0F) > 0x09 || code == 0 ||
+        code == 0x05 || code == 0x06 || code == 0x10 || code == 0x15)
+        return false;
+    else
+        return true;
 }
 
 inline bool isComposedCodeCommand(byte_t code) {
