@@ -56,7 +56,8 @@ class Leitor {
             if (timeout_resposta_ms && leituraDeadline.timedOut()) {
                 LogPolicy::log(
                     "O processo de leitura excedeu o tempo informado pelo "
-                    "usuário (%i ms) sem receber nenhuma resposta. Estado: "
+                    "usuário (%i ms) sem receber nenhuma resposta completa com "
+                    "sucesso. Estado: "
                     "%s\n, Status: %s",
                     timeout_resposta_ms, _estado2string(estado),
                     _status2verbose(_leitor.status()));

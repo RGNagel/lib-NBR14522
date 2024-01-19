@@ -1,3 +1,5 @@
+#pragma once
+
 #include <BCD.h>
 #include <vector>
 
