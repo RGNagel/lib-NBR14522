@@ -10,5 +10,8 @@ if [ -n "$1" ]; then
     target="$1"
 fi
 
+mkdir build
 cmake --build ./build --config Debug --target "$target" -j 6 --
+
+
 

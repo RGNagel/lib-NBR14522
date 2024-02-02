@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.14)
 # Set project name, version and laguages here. (change as needed)
 # Version numbers are available by including "exampleConfig.h" in
 # the source. See exampleConfig.h.in for some more details.
-project(LIB_NBR14522 VERSION 1.2.3.4 LANGUAGES CXX)
+project(LIB_NBR14522 VERSION 1.2.3.4 LANGUAGES C CXX)
 
 # message(STATUS "CMAKE_SYSTEM_NAME: " ${CMAKE_SYSTEM_NAME})
 
